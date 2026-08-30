@@ -160,9 +160,9 @@ def run(checks: Checker) -> None:
 
     status, raw = checks.text_call("GET", "/api/output/test.transcribe.srt")
     checks.check(
-        "GET /api/output serves the written SRT",
-        status == 200 and SRT_BLOCK in raw,
-        f"{status} {raw[:40]!r}",
+        "GET /api/output serves LF SRT (no CR on Windows)",
+        status == 200 and SRT_BLOCK in raw and "\r" not in raw,
+        f"{status} {raw[:44]!r}",
     )
     status, _ = checks.text_call("GET", "/api/output/never-written.json")
     checks.check("missing artifact is 404", status == 404, str(status))

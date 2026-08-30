@@ -34,6 +34,8 @@ def write_outputs(
     json_path = output_directory / f"{stem}.{tag}.json"
     srt_path = output_directory / f"{stem}.{tag}.srt"
 
+    # Explicit LF: the browser's Download SRT is LF, and text mode would write
+    # CRLF on Windows, so the two copies would never compare equal.
     json_path.write_text(
         json.dumps(
             result.model_dump(mode="json", exclude_none=True),
@@ -42,6 +44,7 @@ def write_outputs(
         )
         + "\n",
         encoding="utf-8",
+        newline="\n",
     )
-    srt_path.write_text(to_srt(result.segments), encoding="utf-8")
+    srt_path.write_text(to_srt(result.segments), encoding="utf-8", newline="\n")
     return [json_path, srt_path]

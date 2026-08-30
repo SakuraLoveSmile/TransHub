@@ -80,6 +80,10 @@ D:\ASMR\RJ123\track01.flac  →  output/track01.transcribe.json / .srt   （转�
 D:\ASMR\test.flac           →  output/test.zh.json / .srt              （翻译）
 ```
 
+产物统一按 LF 写入（Windows 也一样），所以页面上 Download SRT 得到的内容与服务器
+`output/` 里的文件逐字节相同；`smoke_check.py` 有一条「serves LF SRT (no CR on Windows)」
+专门守这一点——它是 CI 在 windows-latest 上跑出来的真实回归。
+
 ## 脚本
 
 | 脚本 | 用途 | 依赖 |
