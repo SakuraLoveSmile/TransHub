@@ -7,6 +7,8 @@ real audio file:
 
 Add ``--expect-device cuda`` to assert the GPU run, and force
 ``device = "cpu"`` in ``config.toml`` to assert the CPU-fallback run.
+Real inference on CPU can take minutes, so each request waits ``--timeout``
+seconds (default 900) before it is reported as FAIL.
 Nothing here can pass without a genuine model and genuine media.
 """
 
@@ -239,12 +241,18 @@ def main() -> int:
     parser.add_argument("--language", default="ja", help="expected payload language")
     parser.add_argument("--expect-device", choices=("cpu", "cuda"), default=None)
     parser.add_argument(
+        "--timeout",
+        type=float,
+        default=900.0,
+        help="seconds to wait per request; real inference on CPU can take minutes",
+    )
+    parser.add_argument(
         "--output-dir",
         default=str(Path(__file__).resolve().parents[1] / "output"),
     )
     args = parser.parse_args()
 
-    checks = Checker(args.base_url, Path(args.output_dir))
+    checks = Checker(args.base_url, Path(args.output_dir), timeout=args.timeout)
     summary = run(checks, args)
     print("\n--- Phase 2 summary ---")
     for key, value in summary.items():

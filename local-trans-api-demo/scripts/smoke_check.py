@@ -26,9 +26,10 @@ SRT_BLOCK = "1\n00:00:00,800 --> 00:00:03,400\nこんばんは。"
 
 
 class Checker:
-    def __init__(self, base_url: str, output_dir: Path):
+    def __init__(self, base_url: str, output_dir: Path, timeout: float = 60.0):
         self.base = base_url.rstrip("/")
         self.output_dir = output_dir
+        self.timeout = timeout
         self.failed = 0
 
     def check(self, name: str, ok: bool, detail: str = "") -> None:
@@ -46,13 +47,15 @@ class Checker:
             self.base + path, data=data, method=method, headers=headers
         )
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode("utf-8", "replace")
                 return response.status, raw
         except urllib.error.HTTPError as error:
             return error.code, error.read().decode("utf-8", "replace")
         except urllib.error.URLError as error:
             return 0, f"connection error: {error.reason}"
+        except OSError as error:  # e.g. a socket timeout on slow real inference
+            return 0, f"request error after {self.timeout}s: {error}"
 
     def json_call(self, method: str, path: str, body: dict | None = None):
         status, raw = self.request(method, path, body)
