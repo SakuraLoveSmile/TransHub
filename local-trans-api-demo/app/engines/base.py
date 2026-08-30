@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from app.core.config import Profile
-from app.schemas.api import InferenceResult, ModelInfo
+from app.core.config import MODEL_CATALOG, AppConfig, Profile
+from app.schemas.api import InferenceResult, ModelInfo, Segment
 
 
-def compute_metrics(
-    duration: float, processing_time: float
-) -> tuple[float, float]:
-    """Return (realtime_factor, speed) as used by both Mock and real engines."""
+def compute_metrics(duration: float, processing_time: float) -> tuple[float, float]:
+    """Return (realtime_factor, speed), shared by Mock and real engines."""
     if duration <= 0 or processing_time <= 0:
         return 0.0, 0.0
     return (
@@ -18,15 +16,47 @@ def compute_metrics(
     )
 
 
+def build_result(
+    profile: Profile,
+    mock: bool,
+    duration: float,
+    processing_time: float,
+    text: str,
+    segments: list[Segment],
+) -> InferenceResult:
+    """One schema for every engine: transcription carries ``language``,
+    translation carries ``source_language`` / ``target_language``."""
+    realtime_factor, speed = compute_metrics(duration, processing_time)
+    common = {
+        "success": True,
+        "mock": mock,
+        "profile": profile.id,
+        "model": profile.model_id,
+        "duration": duration,
+        "processing_time": processing_time,
+        "realtime_factor": realtime_factor,
+        "speed": speed,
+        "text": text,
+        "segments": segments,
+    }
+    if profile.task == "translate":
+        return InferenceResult(
+            **common,
+            source_language=profile.language,
+            target_language=profile.target_language,
+        )
+    return InferenceResult(**common, language=profile.language)
+
+
 class BaseInferenceEngine(ABC):
-    """Shared contract for every engine; API, UI and outputs depend only on this."""
+    """API, UI, schema and outputs depend on this contract only."""
 
     name: str = "base"
     mock: bool = False
     device: str = "unknown"
 
-    def __init__(self, profiles: dict[str, Profile]):
-        self.profiles = profiles
+    def __init__(self, config: AppConfig):
+        self.config = config
         self.loaded_model: str | None = None
         self.busy: bool = False
 
@@ -42,6 +72,19 @@ class BaseInferenceEngine(ABC):
     async def transcribe(self, path: str, profile: str) -> InferenceResult:
         pass
 
-    @abstractmethod
+    def is_installed(self, model_id: str) -> bool:
+        """Mock mode has no model files, so everything counts as installed."""
+        return True
+
     def list_models(self) -> list[ModelInfo]:
-        pass
+        return [
+            ModelInfo(
+                id=model_id,
+                name=meta["name"],
+                type=meta["type"],
+                installed=self.is_installed(model_id),
+                loaded=self.loaded_model == model_id,
+                mock=self.mock,
+            )
+            for model_id, meta in MODEL_CATALOG.items()
+        ]

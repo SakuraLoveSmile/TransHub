@@ -28,9 +28,9 @@ logger = logging.getLogger("app")
 
 def create_engine(name: str, config: AppConfig) -> BaseInferenceEngine:
     if name == "mock":
-        return MockEngine(config.profiles)
+        return MockEngine(config)
     if name == "faster-whisper":
-        return FasterWhisperEngine(config.profiles)
+        return FasterWhisperEngine(config)
     raise RuntimeError(f"Unknown engine: {name}")
 
 

@@ -4,6 +4,9 @@ __pycache__/
 .venv/
 .venv-test/
 
+# Local engine-specific config (see README "Phase 2 验收"); config.toml stays mock
+config.real.toml
+
 # Demo output and model storage (keep the directories tracked, not the content)
 output/*
 !output/.gitkeep

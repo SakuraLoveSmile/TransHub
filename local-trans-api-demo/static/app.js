@@ -4,11 +4,6 @@ const API = {
   translate: "/api/translate-audio",
 };
 
-const MODEL_BY_MODE = {
-  transcribe: "whisper-ja-1.5b",
-  translate: "chickenrice-v2",
-};
-
 const TAG_BY_MODE = {
   transcribe: "transcribe",
   translate: "zh",
@@ -31,7 +26,6 @@ const els = {
 };
 
 let jobRunning = false;
-let jobNeedsModel = null;
 let lastOutcome = null;
 let currentResult = null;
 let currentMode = "transcribe";
@@ -99,11 +93,7 @@ async function pollStatus() {
   els.loadedModel.textContent = snapshot.loaded_model || "None";
 
   if (jobRunning) {
-    if (jobNeedsModel && snapshot.loaded_model !== jobNeedsModel) {
-      setStatus("Loading Model", "running");
-    } else {
-      setStatus("Processing", "running");
-    }
+    setStatus(snapshot.loaded_model ? "Processing" : "Loading Model", "running");
     return;
   }
   if (snapshot.status === "running") {
@@ -192,11 +182,7 @@ async function run() {
   currentMode = mode;
 
   jobRunning = true;
-  jobNeedsModel = MODEL_BY_MODE[mode];
-  setStatus(
-    els.loadedModel.textContent === jobNeedsModel ? "Processing" : "Loading Model",
-    "running"
-  );
+  pollStatus();
 
   try {
     const response = await fetch(
@@ -225,7 +211,6 @@ async function run() {
     outcome("Error", "error");
   } finally {
     jobRunning = false;
-    jobNeedsModel = null;
     els.run.disabled = false;
     els.run.textContent = "Run";
   }

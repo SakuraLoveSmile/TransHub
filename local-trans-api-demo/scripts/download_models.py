@@ -14,19 +14,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.config import BASE_DIR, load_config  # noqa: E402
+from app.core.config import (  # noqa: E402
+    BASE_DIR,
+    MODEL_CATALOG,
+    load_config,
+    model_dir_is_complete,
+)
 
 REPOSITORIES = {
-    "whisper-ja-1.5b": "TransWithAI/whisper-ja-1.5B-ct2",
-    "chickenrice-v2": "chickenrice0721/whisper-large-v2-translate-zh-v0.2-st-ct2",
+    model_id: meta["repo_id"] for model_id, meta in MODEL_CATALOG.items()
 }
 
 
 def download(model_id: str, target: Path) -> bool:
     from huggingface_hub import snapshot_download
 
-    if target.exists() and any(target.iterdir()):
-        print(f"[skip] {model_id} already present at {target}")
+    if model_dir_is_complete(target):
+        print(f"[skip] {model_id} already downloaded at {target}")
         return True
 
     repository = REPOSITORIES[model_id]
