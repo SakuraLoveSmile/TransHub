@@ -54,6 +54,7 @@ Base URL：`http://127.0.0.1:8765`
 | POST | `/api/models/unload` | 卸载模型 |
 | POST | `/api/transcribe` | 日语音频转写，profile `ja-transcribe` |
 | POST | `/api/translate-audio` | 日语 → 中文语音翻译，profile `ja-zh` |
+| GET | `/api/output/<name>` | 只读回 `output/` 里的 `<name>.json` / `.srt`，供验收页比对落盘结果 |
 
 推理请求：
 
@@ -95,6 +96,29 @@ D:\ASMR\test.flac           →  output/test.zh.json / .srt              （翻�
 ```
 
 两个检查脚本逐条打印 `PASS` / `FAIL` 并在有失败时以非 0 退出，可以直接进 CI。
+
+## 可视化验收（Web）
+
+同样的验收做成了页面：<http://127.0.0.1:8765/diagnostics.html>（首页标题下有入口）。
+选套件 → 填媒体路径 → Run，每条断言实时变成 pass / fail / inconclusive，行可展开看请求结果，
+底部 Summary 给出 `engine / device / load_seconds / duration / processing_time / speed /
+segments / first_text`，可一键复制。
+
+- **Phase 0 · Mock**：15 条，覆盖端点、模型目录、load/unload、日/中固定字幕、
+  `output/` 落盘与 JSON 一致、空路径 422、并发 409、页面可访问。
+- **Phase 2 · Real**：15 条，把固定字幕换成真实断言——schema 字段集与 Mock 相同、段数 > 0、
+  时间轴递增有效、`text` 等于分段拼接、指标符合公式，另加 device、模型未下载、
+  文件不存在 422、非音频 400。
+
+断言逻辑与 `smoke_check.py` / `phase2_check.py` 一致，两者并存：页面给人看，脚本给 CI 跑。
+落盘相关的三条靠 `GET /api/output/<name>` 读回文件，浏览器自己看不到服务器磁盘。
+
+device 只做**呈现**：页面显示当前 `cpu` / `cuda`，期望值不符时提示
+「改 `[faster_whisper] device` 后重启 `run.bat`」，不提供运行时切换。
+Stop 只取消浏览器请求，服务端会把当前推理跑完并继续占用唯一推理槽——页面在停用时和
+运行前（`engine idle before the run`）都会明确提示这一点。
+
+代码在 `static/diagnostics.html` 与 `static/diagnostics.js`，无框架，样式复用 `style.css`。
 
 ## CI（Windows 实测）
 
@@ -231,16 +255,20 @@ first_text       こんばんは。
 服务固定监听 `127.0.0.1`。这是一个接受本地文件路径的 API，
 **不得直接暴露到局域网 / 公网**（Local path API must not be exposed directly to LAN/WAN）。
 
+`GET /api/output/<name>` 是唯一能读服务器文件的接口：只读、只接受
+`output/` 目录下 `*.json` / `*.srt` 的裸文件名，含 `/`、`\`、`..` 或别的扩展名一律 422，
+解析后仍会校验目标确实落在 `output/` 内。
+
 ## 目录结构
 
 ```text
-app/api/        路由（health / models / inference）
+app/api/        路由（health / models / inference / output）
 app/core/       配置、应用状态、统一错误类型
 app/engines/    Engine 接口 + MockEngine + FasterWhisperEngine
 app/services/   InferenceService：Profile 解析、模型切换、并发锁、写输出
 app/schemas/    请求 / 响应模型
 app/utils/      SRT 生成、JSON / SRT 落盘
-static/         原生 HTML / CSS / JS 前端
+static/         原生前端：demo（index/app.js）+ 验收页（diagnostics）
 models/ output/ samples/ scripts/
 ```
 

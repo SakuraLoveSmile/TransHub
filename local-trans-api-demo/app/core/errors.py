@@ -39,6 +39,10 @@ class UnsupportedFileError(AppError):
     status_code = 400
 
 
+class OutputNotFoundError(AppError):
+    status_code = 404
+
+
 class ModelLoadError(AppError):
     status_code = 503
 

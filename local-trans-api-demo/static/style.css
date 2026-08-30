@@ -193,3 +193,136 @@ button:disabled {
   border-radius: 7px;
   font-size: 13px;
 }
+
+/* Acceptance runner (static/diagnostics.html) */
+
+.sub {
+  margin: -10px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sub a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+select,
+input[type="number"] {
+  width: 100%;
+  padding: 9px 11px;
+  color: var(--text);
+  font: inherit;
+  background: #0c0e12;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hint code {
+  color: var(--text);
+}
+
+.count {
+  float: right;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.check {
+  border-bottom: 1px solid #1f242e;
+}
+
+.check:last-child {
+  border-bottom: 0;
+}
+
+.check summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.check summary::-webkit-details-marker {
+  display: none;
+}
+
+.check .name {
+  flex: 1;
+}
+
+.check .state {
+  color: var(--muted);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.check .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #333a47;
+}
+
+.check .dot.running {
+  background: var(--warn);
+}
+
+.check .dot.pass {
+  background: var(--ok);
+}
+
+.check .dot.fail {
+  background: var(--err);
+}
+
+.check .dot.skip {
+  background: var(--muted);
+}
+
+.check .state.running {
+  color: var(--warn);
+}
+
+.check .state.pass {
+  color: var(--ok);
+}
+
+.check .state.fail {
+  color: var(--err);
+}
+
+.check .detail {
+  margin: 0 0 8px 17px;
+  padding: 8px 10px;
+  max-height: 260px;
+  overflow: auto;
+  color: var(--muted);
+  background: #0c0e12;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+}

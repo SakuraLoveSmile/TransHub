@@ -158,6 +158,17 @@ def run(checks: Checker) -> None:
         doc.get("profile") == "ja-transcribe" and len(doc.get("segments", [])) == 2,
     )
 
+    status, raw = checks.text_call("GET", "/api/output/test.transcribe.srt")
+    checks.check(
+        "GET /api/output serves the written SRT",
+        status == 200 and SRT_BLOCK in raw,
+        f"{status} {raw[:40]!r}",
+    )
+    status, _ = checks.text_call("GET", "/api/output/never-written.json")
+    checks.check("missing artifact is 404", status == 404, str(status))
+    status, _ = checks.text_call("GET", "/api/output/config.toml")
+    checks.check("non-artifact name rejected with 422", status == 422, str(status))
+
     status, payload = checks.json_call("POST", "/api/transcribe", {"path": ""})
     checks.check("empty path rejected with 422", status == 422, str(payload)[:80])
 

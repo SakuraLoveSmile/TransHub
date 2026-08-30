@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import health, inference, models
+from app.api import health, inference, models, output
 from app.core.config import BASE_DIR, AppConfig, load_config
 from app.core.errors import AppError
 from app.core.state import AppState
@@ -66,6 +66,7 @@ if config.host != LOCALHOST:
 app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(inference.router)
+app.include_router(output.router)
 app.mount("/", StaticFiles(directory=BASE_DIR / "static", html=True), name="static")
 
 logger.info("Engine=%s output=%s", config.engine, config.output_directory)

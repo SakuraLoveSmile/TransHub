@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acceptance Runner — Local Trans API Demo</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <h1>Acceptance Runner</h1>
+      <p class="sub">
+        <a href="/">← Demo</a> · <a href="/docs">API docs</a> ·
+        <span id="engine-line">Engine: -</span>
+      </p>
+
+      <section class="card">
+        <span class="field">Suite</span>
+        <div class="modes">
+          <label class="radio">
+            <input type="radio" name="suite" value="mock" checked />
+            <span>Phase 0 · Mock engine</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="suite" value="real" />
+            <span>Phase 2 · Real engine</span>
+          </label>
+        </div>
+
+        <label class="field" for="file">Media Path</label>
+        <input
+          id="file"
+          type="text"
+          value="D:\ASMR\test.flac"
+          spellcheck="false"
+          autocomplete="off"
+        />
+
+        <div class="grid">
+          <div>
+            <label class="field" for="model">Model</label>
+            <input id="model" type="text" value="whisper-ja-1.5b" spellcheck="false" />
+          </div>
+          <div>
+            <label class="field" for="language">Language</label>
+            <input id="language" type="text" value="ja" spellcheck="false" />
+          </div>
+          <div>
+            <label class="field" for="device">Expect device</label>
+            <select id="device">
+              <option value="">any</option>
+              <option value="cpu">cpu</option>
+              <option value="cuda">cuda</option>
+            </select>
+          </div>
+          <div>
+            <label class="field" for="timeout">Timeout / request (s)</label>
+            <input id="timeout" type="number" value="60" min="1" step="1" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="run" class="primary" type="button">Run checks</button>
+          <button id="stop" type="button" disabled>Stop</button>
+          <button id="copy-summary" type="button" disabled>Copy summary</button>
+        </div>
+        <p class="hint">
+          真实引擎的推理可能几分钟一条，Stop 只取消浏览器请求，服务端会继续跑到结束并占用
+          唯一推理槽。device 由 <code>[faster_whisper] device</code> 配置决定，改完要重启。
+        </p>
+        <p class="error" id="banner" hidden></p>
+      </section>
+
+      <section class="card">
+        <h2>Checks <span class="count" id="count"></span></h2>
+        <div id="checks"></div>
+      </section>
+
+      <section class="card">
+        <h2>Summary</h2>
+        <div class="metrics" id="summary"><span class="value">-</span></div>
+      </section>
+    </main>
+
+    <script src="/diagnostics.js"></script>
+  </body>
+</html>
