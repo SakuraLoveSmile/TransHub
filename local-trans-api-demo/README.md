@@ -86,6 +86,17 @@ Phase 2 才需要的模型下载（默认不安装 AI 依赖）：
 .venv\Scripts\python scripts\download_models.py
 ```
 
+## CI（Windows 实测）
+
+`setup.bat` 与 `run.bat` 只能在 Windows 上验证，因此由仓库根的
+`.github/workflows/windows-smoke.yml` 在 `windows-latest` 上跑：`setup.bat` → 检查
+`.venv\Scripts\python.exe` → 用 `run.bat` 起服务 → `scripts/smoke_check.py` 断言全部
+端点、422、并发 409 以及 `output/` 里的 JSON / SRT 内容。push 到 `main` 且改动落在
+`local-trans-api-demo/**` 时自动触发，也可手动 dispatch；日志与 `output/` 作为 artifact 上传。
+
+注意起服务与断言必须写在同一个 step：Actions 会在 step 结束时回收该 step 派生的进程树，
+分两个 step 写会让服务在下一步开始前就被杀掉。
+
 ## 切换到真实引擎
 
 Phase 1 起实现 `app/engines/faster_whisper_engine.py`，随后只改配置：
@@ -121,3 +132,7 @@ models/ output/ samples/ scripts/
 - 后端 `realtime_factor` 由 `processing_time / duration` 计算（四舍五入到 4 位），
   翻译样例因此为 `0.0152`，与设计文档示例中的 `0.0151` 有末位差异。
 - 状态展示每 2 秒轮询一次，未使用 WebSocket。
+- CI 只走过 `setup.bat` 的 `py -3.12` 引导分支；`py` 启动器缺失时的 `python` / `python3`
+  回退分支未被覆盖（`python3` 在真实 Windows 上可能被 Microsoft Store 别名占位）。
+- 「Copy Text」优先用 Clipboard API，失焦等情况下退回 `execCommand("copy")`；
+  这条路径还需要一次真实前台窗口点击确认。
