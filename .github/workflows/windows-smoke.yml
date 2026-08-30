@@ -1,0 +1,114 @@
+name: Windows smoke test
+
+# Verifies the Phase 0 acceptance list on real Windows: setup.bat creates the
+# venv, run.bat starts the server, then scripts/smoke_check.py asserts every
+# API / UI entry point and the JSON + SRT files on disk.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "local-trans-api-demo/**"
+      - ".github/workflows/windows-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phase0:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: local-trans-api-demo
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show available Python launchers
+        shell: cmd
+        run: |
+          where py || echo [ci] no py launcher on PATH
+          py --list-paths || echo [ci] py --list-paths unavailable
+          where python || echo [ci] no python on PATH
+
+      - name: Run setup.bat
+        shell: cmd
+        run: |
+          call setup.bat
+          if errorlevel 1 exit /b 1
+
+      - name: Verify .venv was created
+        shell: cmd
+        run: |
+          if not exist ".venv\Scripts\python.exe" (
+            echo [ci] .venv\Scripts\python.exe missing after setup.bat
+            exit /b 1
+          )
+          .venv\Scripts\python --version
+          .venv\Scripts\python -m pip list
+
+      - name: Start server with run.bat
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP "server.log"
+          $err = Join-Path $env:RUNNER_TEMP "server.err"
+          $pidFile = Join-Path $env:RUNNER_TEMP "server.pid"
+          $server = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "run.bat" `
+            -WorkingDirectory $PWD.Path -PassThru -WindowStyle Hidden `
+            -RedirectStandardOutput $log -RedirectStandardError $err
+          $server.Id | Set-Content $pidFile
+
+          for ($attempt = 0; $attempt -lt 60; $attempt++) {
+            Start-Sleep -Seconds 1
+            try {
+              $health = Invoke-WebRequest -Uri "http://127.0.0.1:8765/api/health" -UseBasicParsing -TimeoutSec 3
+              if ($health.StatusCode -eq 200) {
+                Write-Host "[ci] server up (pid $($server.Id)) after $($attempt + 1)s"
+                exit 0
+              }
+            } catch {
+              if (-not $server.WaitForExit(100)) { continue }
+              Write-Host "[ci] run.bat exited with code $($server.ExitCode)"
+            }
+          }
+
+          Write-Host "[ci] server never became healthy; log follows"
+          Get-Content $log, $err -ErrorAction SilentlyContinue
+          exit 1
+
+      - name: Run smoke check
+        shell: cmd
+        run: |
+          .venv\Scripts\python scripts\smoke_check.py --base-url http://127.0.0.1:8765
+          if errorlevel 1 exit /b 1
+
+      - name: Stop server
+        if: always()
+        shell: pwsh
+        run: |
+          $pidFile = Join-Path $env:RUNNER_TEMP "server.pid"
+          if (-not (Test-Path $pidFile)) { exit 0 }
+          $serverId = Get-Content $pidFile
+          Get-CimInstance Win32_Process -Filter "ParentProcessId=$serverId" -ErrorAction SilentlyContinue |
+            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          Stop-Process -Id $serverId -Force -ErrorAction SilentlyContinue
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-server-log
+          path: |
+            ${{ runner.temp }}/server.log
+            ${{ runner.temp }}/server.err
+          if-no-files-found: ignore
+
+      - name: Upload generated output files
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-output
+          path: local-trans-api-demo/output/
+          if-no-files-found: ignore

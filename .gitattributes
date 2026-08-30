@@ -1,0 +1,16 @@
+# Windows batch scripts must keep CRLF, otherwise cmd.exe on a real Windows
+# machine (and in CI) can mis-parse goto labels.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.py text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.srt text eol=lf

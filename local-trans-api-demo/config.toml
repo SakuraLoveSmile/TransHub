@@ -1,0 +1,25 @@
+[server]
+host = "127.0.0.1"
+port = 8765
+
+[inference]
+engine = "mock"
+
+[output]
+directory = "./output"
+
+[models]
+directory = "./models"
+
+[profiles.ja_transcribe]
+id = "ja-transcribe"
+model_id = "whisper-ja-1.5b"
+task = "transcribe"
+language = "ja"
+
+[profiles.ja_zh]
+id = "ja-zh"
+model_id = "chickenrice-v2"
+task = "translate"
+language = "ja"
+target_language = "zh-CN"

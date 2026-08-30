@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local Trans API Demo</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="page">
+      <h1>Local Trans API Demo</h1>
+
+      <section class="card">
+        <div class="row">
+          <span class="label">Engine</span>
+          <span class="value" id="engine">-</span>
+        </div>
+        <div class="row">
+          <span class="label">Status</span>
+          <span class="value" id="status">Connecting...</span>
+        </div>
+        <div class="row">
+          <span class="label">Loaded Model</span>
+          <span class="value" id="loaded-model">None</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <label class="field" for="media-path">Media Path</label>
+        <input
+          id="media-path"
+          type="text"
+          value="D:\ASMR\test.flac"
+          spellcheck="false"
+          autocomplete="off"
+        />
+
+        <span class="field">Mode</span>
+        <div class="modes">
+          <label class="radio">
+            <input type="radio" name="mode" value="transcribe" checked />
+            <span>Japanese Transcription</span>
+          </label>
+          <label class="radio">
+            <input type="radio" name="mode" value="translate" />
+            <span>Japanese &rarr; Chinese</span>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button id="run" type="button">Run</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Result</h2>
+        <div class="metrics">
+          <div class="metric">
+            <span class="label">Model</span>
+            <span class="value" id="result-model">-</span>
+          </div>
+          <div class="metric">
+            <span class="label">Audio</span>
+            <span class="value" id="result-duration">-</span>
+          </div>
+          <div class="metric">
+            <span class="label">Processing</span>
+            <span class="value" id="result-processing">-</span>
+          </div>
+          <div class="metric">
+            <span class="label">Speed</span>
+            <span class="value" id="result-speed">-</span>
+          </div>
+        </div>
+        <div class="segments" id="segments"></div>
+        <p class="error" id="error" hidden></p>
+        <div class="actions">
+          <button id="copy" type="button" disabled>Copy Text</button>
+          <button id="download" type="button" disabled>Download SRT</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
