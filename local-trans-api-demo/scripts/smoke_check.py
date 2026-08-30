@@ -9,11 +9,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import threading
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+# Windows consoles default to a non-UTF-8 code page; the assertions print
+# Japanese and Chinese payloads, so stdout must not depend on that code page.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 WINDOWS_PATH = "D:\\ASMR\\test.flac"
 EXPECTED_MODELS = {"whisper-ja-1.5b", "chickenrice-v2"}

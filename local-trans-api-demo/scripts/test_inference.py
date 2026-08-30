@@ -21,6 +21,10 @@ from app.core.state import AppState  # noqa: E402
 from app.main import create_engine  # noqa: E402
 from app.services.inference_service import InferenceService  # noqa: E402
 
+# Windows consoles default to a non-UTF-8 code page, which cannot print
+# Japanese or Chinese transcripts.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 
 async def run(profile: str, file_path: str) -> int:
     config = load_config()
