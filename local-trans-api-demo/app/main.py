@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
-from app.api import health, inference, models, output
+from app.api import health, inference, models, output, setup
 from app.core.config import BASE_DIR, AppConfig, load_config
 from app.core.errors import AppError
 from app.core.state import AppState
@@ -15,6 +15,7 @@ from app.engines.base import BaseInferenceEngine
 from app.engines.faster_whisper_engine import FasterWhisperEngine
 from app.engines.mock_engine import MockEngine
 from app.services.inference_service import InferenceService
+from app.services.setup_service import SetupService
 
 # Local path API must not be exposed directly to LAN/WAN: bind to 127.0.0.1.
 LOCALHOST = "127.0.0.1"
@@ -57,6 +58,7 @@ state = AppState(config=config, engine=engine)
 app.state.config = config
 app.state.engine = engine
 app.state.service = InferenceService(state)
+app.state.setup = SetupService(config)
 
 if config.host != LOCALHOST:
     logger.warning(
@@ -67,6 +69,7 @@ app.include_router(health.router)
 app.include_router(models.router)
 app.include_router(inference.router)
 app.include_router(output.router)
+app.include_router(setup.router)
 app.mount("/", StaticFiles(directory=BASE_DIR / "static", html=True), name="static")
 
 logger.info("Engine=%s output=%s", config.engine, config.output_directory)

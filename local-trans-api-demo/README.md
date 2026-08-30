@@ -55,6 +55,9 @@ Base URL：`http://127.0.0.1:8765`
 | POST | `/api/transcribe` | 日语音频转写，profile `ja-transcribe` |
 | POST | `/api/translate-audio` | 日语 → 中文语音翻译，profile `ja-zh` |
 | GET | `/api/output/<name>` | 只读回 `output/` 里的 `<name>.json` / `.srt`，供验收页比对落盘结果 |
+| GET | `/api/setup/env` | 环境体检：AI 依赖能否 import、CUDA 设备数、生效的 HF 端点、磁盘余量、每个模型的齐全度与已下字节 |
+| POST | `/api/setup/download` | 启动后台下载 body `{"model": "...", "endpoint": ""}`，`endpoint` 可填镜像 |
+| GET | `/api/setup/download` | 当前下载任务进度（字节 / 总量 / 速度 / 状态 / 错误） |
 
 推理请求：
 
@@ -116,6 +119,20 @@ segments / first_text`，可一键复制。
 
 断言逻辑与 `smoke_check.py` / `phase2_check.py` 一致，两者并存：页面给人看，脚本给 CI 跑。
 落盘相关的三条靠 `GET /api/output/<name>` 读回文件，浏览器自己看不到服务器磁盘。
+
+页面顶部的 **Setup** 区负责「跑之前先看清环境」：
+
+- 体检一行行列出：生效的配置文件、engine / device / compute_type、`faster_whisper` 等三个
+  依赖能否 import、CUDA 设备数、当前 HF 端点、模型目录所在盘的剩余空间。
+- 每个模型一行，显示仓库地址、已落盘字节、齐全度徽章（缺哪几个文件直接写出来），
+  点 **Download** 由服务端后台下载，进度条按秒刷新字节 / 总量 / 速度；
+  中断或失败后再点会**续传**而不是重来。
+- 镜像地址填在 HF endpoint 框里随请求下发，留空则用服务器启动时的 `HF_ENDPOINT`。
+- 依赖缺失时页面会把该执行的那条命令原样显示出来（`pip install -r requirements-ai.txt`）。
+
+仍然留在命令行的只有两件事：第一次 `setup.bat` / `run.bat`（服务没起来就没有网页），
+以及装 Python 依赖。让服务端自己跑 pip 等于给一个「接受本地路径的本地 API」加上执行任意
+命令的能力，与它的定位相冲突，所以这一步刻意不做成按钮。
 
 device 只做**呈现**：页面显示当前 `cpu` / `cuda`，期望值不符时提示
 「改 `[faster_whisper] device` 后重启 `run.bat`」，不提供运行时切换。
@@ -215,6 +232,9 @@ run.bat
 
 直接改 `config.toml` 那一行也完全可以，只是别把 `faster-whisper` 提交回去。
 
+模型下载也可以不碰终端：打开验收页的 Setup 区，点对应模型的 **Download**，进度与失败原因都
+在页面上；两条路走的是同一套齐全度判断。
+
 必须跑两遍：GPU 一遍、强制 CPU 回退一遍。
 
 ```powershell
@@ -266,7 +286,7 @@ first_text       こんばんは。
 ## 目录结构
 
 ```text
-app/api/        路由（health / models / inference / output）
+app/api/        路由（health / models / inference / output / setup）
 app/core/       配置、应用状态、统一错误类型
 app/engines/    Engine 接口 + MockEngine + FasterWhisperEngine
 app/services/   InferenceService：Profile 解析、模型切换、并发锁、写输出

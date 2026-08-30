@@ -52,6 +52,19 @@ class ModelLoadRequest(BaseModel):
         return value
 
 
+class DownloadRequest(BaseModel):
+    model: str
+    # Empty means "use whatever HF_ENDPOINT the server was started with".
+    endpoint: str = ""
+
+    @field_validator("model")
+    @classmethod
+    def _model_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("model must not be empty")
+        return value
+
+
 class ModelInfo(BaseModel):
     id: str
     name: str

@@ -31,6 +31,10 @@ class EngineBusyError(AppError):
     status_code = 409
 
 
+class DownloadBusyError(AppError):
+    status_code = 409
+
+
 class InvalidPathError(AppError):
     status_code = 422
 

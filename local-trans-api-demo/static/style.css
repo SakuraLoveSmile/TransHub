@@ -326,3 +326,78 @@ button.primary {
   font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre-wrap;
 }
+
+.env {
+  margin-bottom: 12px;
+}
+
+.env .value {
+  font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+.modelrow {
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #12151b;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.modeltitle {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.modelmeta {
+  color: var(--muted);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+.badge {
+  display: inline-block;
+  margin: 6px 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 11px/1.7 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.badge.ok {
+  color: var(--ok);
+  background: rgba(52, 192, 122, 0.12);
+  border: 1px solid rgba(52, 192, 122, 0.35);
+}
+
+.badge.warn {
+  color: var(--warn);
+  background: rgba(240, 180, 41, 0.1);
+  border: 1px solid rgba(240, 180, 41, 0.32);
+}
+
+.bar {
+  height: 6px;
+  background: #0c0e12;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+.progress {
+  margin: 5px 0 8px;
+  color: var(--muted);
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.actions input.grow {
+  flex: 1;
+  min-width: 200px;
+}

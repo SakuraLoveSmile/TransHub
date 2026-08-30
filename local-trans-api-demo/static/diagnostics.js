@@ -37,6 +37,12 @@ function expectedKeys(withLanguage) {
 
 const els = {
   engineLine: document.getElementById("engine-line"),
+  envState: document.getElementById("env-state"),
+  env: document.getElementById("env"),
+  models: document.getElementById("models"),
+  endpoint: document.getElementById("endpoint"),
+  refreshEnv: document.getElementById("refresh-env"),
+  setupHint: document.getElementById("setup-hint"),
   file: document.getElementById("file"),
   model: document.getElementById("model"),
   language: document.getElementById("language"),
@@ -55,6 +61,9 @@ let abortController = null;
 let rows = {};
 let activeSuite = null;
 let lastSummary = null;
+let env = null;
+let modelRows = {};
+let progressTimer = null;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -705,6 +714,157 @@ function copySummary() {
   });
 }
 
+function formatBytes(value) {
+  if (!value) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+  const scaled = value / 1024 ** index;
+  return `${scaled.toFixed(index === 0 || scaled >= 100 ? 0 : 2)} ${units[index]}`;
+}
+
+async function loadEnv() {
+  const response = await request("GET", "/api/setup/env", undefined, 15000);
+  if (response.status !== 200) {
+    els.envState.textContent = `unreachable (${response.status || response.text})`;
+    return;
+  }
+  env = response.body;
+  els.envState.textContent =
+    `${env.engine} · ${env.cuda_devices} GPU · ${formatBytes(env.disk_free_bytes)} free`;
+  renderEnv();
+  renderModels();
+  warnIfModelMissing();
+}
+
+function envRow(label, value, tone) {
+  const item = document.createElement("div");
+  item.className = "metric";
+  const name = document.createElement("span");
+  name.className = "label";
+  name.textContent = label;
+  const cell = document.createElement("span");
+  cell.className = `value ${tone || ""}`;
+  cell.textContent = value;
+  item.append(name, cell);
+  return item;
+}
+
+function renderEnv() {
+  els.env.textContent = "";
+  const deps = env.ai_dependencies;
+  const depsOk = deps.faster_whisper && deps.ctranslate2 && deps.huggingface_hub;
+  els.env.append(
+    envRow("config", env.config_path),
+    envRow("engine / device", `${env.engine} · ${env.device} · ${env.compute_type}`),
+    envRow(
+      "AI deps",
+      depsOk ? "installed" : `missing: ${Object.entries(deps).filter(([, on]) => !on).map(([name]) => name).join(", ")}`,
+      depsOk ? "state-ok" : "state-error"
+    ),
+    envRow("CUDA devices", String(env.cuda_devices), env.cuda_devices ? "state-ok" : "state-idle"),
+    envRow("HF endpoint", env.hf_endpoint),
+    envRow("models dir", env.models_directory)
+  );
+  if (!depsOk) {
+    const hint = document.createElement("p");
+    hint.className = "hint";
+    hint.textContent = `先在项目目录执行：${env.install_command}`;
+    els.env.append(hint);
+  }
+}
+
+function renderModels() {
+  els.models.textContent = "";
+  modelRows = {};
+  for (const model of env.models) {
+    const row = document.createElement("div");
+    row.className = "modelrow";
+
+    const title = document.createElement("div");
+    title.className = "modeltitle";
+    title.textContent = `${model.name} · ${model.id}`;
+
+    const badge = document.createElement("span");
+    badge.className = `badge ${model.installed ? "ok" : "warn"}`;
+    badge.textContent = model.installed
+      ? "installed"
+      : `missing ${model.missing_files.join(", ")}`;
+
+    const meta = document.createElement("div");
+    meta.className = "modelmeta";
+    meta.textContent = `${model.repo_id} · ${formatBytes(model.bytes_on_disk)} on disk`;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = model.installed ? "Re-check" : "Download";
+    button.addEventListener("click", () => startDownload(model.id));
+
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    const fill = document.createElement("i");
+    bar.append(fill);
+    const progress = document.createElement("div");
+    progress.className = "progress";
+    progress.textContent = model.installed
+      ? "ready"
+      : model.bytes_on_disk
+        ? `${formatBytes(model.bytes_on_disk)} already on disk — Download resumes`
+        : "not downloaded";
+
+    row.append(title, badge, meta, bar, progress, button);
+    els.models.append(row);
+    modelRows[model.id] = { badge, fill, progress, button };
+  }
+}
+
+async function startDownload(modelId) {
+  const body = { model: modelId, endpoint: els.endpoint.value.trim() };
+  const response = await request("POST", "/api/setup/download", body, 20000);
+  if (response.status !== 200) {
+    showBanner(`下载未启动：${response.status} ${(response.text || "").slice(0, 160)}`);
+    return;
+  }
+  showBanner("");
+  for (const row of Object.values(modelRows)) row.button.disabled = true;
+  if (!progressTimer) progressTimer = setInterval(pollProgress, 1000);
+  pollProgress();
+}
+
+async function pollProgress() {
+  const response = await request("GET", "/api/setup/download", undefined, 15000);
+  const job = response.body || {};
+  const row = modelRows[job.model_id];
+  if (row && job.state === "running") {
+    const ratio = job.total_bytes ? job.downloaded_bytes / job.total_bytes : 0;
+    row.fill.style.width = `${Math.min(100, ratio * 100).toFixed(1)}%`;
+    row.progress.textContent =
+      `${formatBytes(job.downloaded_bytes)} / ${job.total_bytes ? formatBytes(job.total_bytes) : "?"}` +
+      ` · ${formatBytes(job.bytes_per_second)}/s · ${job.seconds}s`;
+  }
+  if (job.state === "done" || job.state === "failed") {
+    clearInterval(progressTimer);
+    progressTimer = null;
+    if (row) {
+      row.progress.textContent = job.state === "done" ? "done" : job.error;
+      if (job.state === "failed") showBanner(job.error);
+    }
+    await loadEnv();
+  }
+}
+
+function warnIfModelMissing() {
+  if (selectedSuite() !== "real" || !env) {
+    els.setupHint.textContent = "";
+    return;
+  }
+  const target = env.models.find((model) => model.id === els.model.value.trim());
+  els.setupHint.textContent = !target
+    ? `模型 ${els.model.value} 不在目录里，验收页会按 catalog 断言失败。`
+    : target.installed
+      ? `${target.id} 已就绪，可以直接跑 Phase 2 套件。`
+      : `${target.id} 还没下载：点上面的 Download，或先跑 Phase 0 套件。`;
+}
+
 async function pollEngineLine() {
   const response = await request("GET", "/api/status", undefined, 5000);
   if (response.status !== 200) {
@@ -731,6 +891,16 @@ function applySuiteDefaults() {
     els.timeout.value = "900";
   }
   buildChecklist(suite);
+  warnIfModelMissing();
+}
+
+async function resumeProgress() {
+  const response = await request("GET", "/api/setup/download", undefined, 15000);
+  if (response.status === 200 && response.body.state === "running") {
+    for (const row of Object.values(modelRows)) row.button.disabled = true;
+    progressTimer = setInterval(pollProgress, 1000);
+    pollProgress();
+  }
 }
 
 document.querySelectorAll('input[name="suite"]').forEach((input) => {
@@ -742,7 +912,10 @@ els.stop.addEventListener("click", () => {
   showBanner("Stopped: the browser gave up, but the server keeps the engine busy until the in-flight inference finishes.");
 });
 els.copy.addEventListener("click", copySummary);
+els.refreshEnv.addEventListener("click", loadEnv);
+els.model.addEventListener("change", warnIfModelMissing);
 
 applySuiteDefaults();
 pollEngineLine();
 setInterval(pollEngineLine, 2000);
+loadEnv().then(resumeProgress);

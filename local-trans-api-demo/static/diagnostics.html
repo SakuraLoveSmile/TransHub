@@ -15,6 +15,27 @@
       </p>
 
       <section class="card">
+        <h2>Setup <span class="count" id="env-state">checking…</span></h2>
+        <div class="env" id="env"></div>
+
+        <div id="models"></div>
+
+        <label class="field" for="endpoint">HF endpoint（可选镜像，留空用服务器环境）</label>
+        <div class="actions">
+          <input
+            id="endpoint"
+            class="grow"
+            type="text"
+            placeholder="https://hf-mirror.com"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <button id="refresh-env" type="button">Re-check</button>
+        </div>
+        <p class="hint" id="setup-hint"></p>
+      </section>
+
+      <section class="card">
         <span class="field">Suite</span>
         <div class="modes">
           <label class="radio">
