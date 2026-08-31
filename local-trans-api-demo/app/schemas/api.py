@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
+from app.schemas.health import HealthResponse, LegacyHealthResponse
+
 
 class InferenceRequest(BaseModel):
     # Mock mode only requires a non-empty path; existence checks come with the
@@ -87,10 +89,6 @@ class LoadModelResponse(BaseModel):
 class UnloadModelResponse(BaseModel):
     success: bool
     loaded_model: str | None
-
-
-class HealthResponse(BaseModel):
-    status: str
 
 
 class StatusResponse(BaseModel):
