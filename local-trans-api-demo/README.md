@@ -87,9 +87,9 @@ python -m app.main
 
 ## Phase 2 Windows + NVIDIA 真机验收
 
-真实 `faster-whisper`、`whisper-ja-1.5b`、CUDA 与 CPU fallback 的完整验收步骤见 [`docs/phase2-windows-nvidia.md`](docs/phase2-windows-nvidia.md)。
+真实 `faster-whisper`、`whisper-ja-1.5b` 与 NVIDIA CUDA 的完整验收步骤见 [`docs/phase2-windows-nvidia.md`](docs/phase2-windows-nvidia.md)。
 
-该阶段只做真实转录链路和设备验收，不包含 ChickenRice 翻译质量评估。
+TransferHub 的真实推理链路为 NVIDIA GPU / CUDA-only，不提供 CPU 推理降级。该阶段只做真实转录链路和设备验收，不包含 ChickenRice 翻译质量评估。
 
 ## Health Check
 
