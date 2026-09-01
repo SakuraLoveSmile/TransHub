@@ -45,11 +45,17 @@ def select_device(device: str = "auto", compute_type: str = "default") -> tuple[
             import ctranslate2
 
             has_cuda = ctranslate2.get_cuda_device_count() > 0
-        except Exception:  # noqa: BLE001 - CUDA fallback must survive broken runtimes
-            has_cuda = False
-        device = "cuda" if has_cuda else "cpu"
+        except Exception as error:  # noqa: BLE001 - surface broken CUDA runtimes clearly
+            raise RuntimeError("CUDA runtime is unavailable") from error
+        if not has_cuda:
+            raise RuntimeError("NVIDIA CUDA GPU is required")
+        device = "cuda"
+    if device != "cuda":
+        raise RuntimeError(
+            f"Unsupported faster-whisper device: {device!r}; only 'cuda' is supported"
+        )
     if compute_type == "default":
-        compute_type = "float16" if device == "cuda" else "int8"
+        compute_type = "float16"
     return device, compute_type
 
 
