@@ -24,7 +24,7 @@ MODEL_CATALOG: dict[str, dict[str, str]] = {
 }
 
 REQUIRED_MODEL_FILES = ("model.bin", "config.json", "tokenizer.json")
-DEVICES = ("auto", "cpu", "cuda")
+DEVICES = ("auto", "cuda")
 
 
 @dataclass(frozen=True)
