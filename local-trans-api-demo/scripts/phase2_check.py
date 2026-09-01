@@ -24,7 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from smoke_check import Checker  # noqa: E402
+from smoke_check import Checker
 
 SRT_LINE = re.compile(r"\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}")
 
@@ -37,8 +37,17 @@ def media_stem(path: str) -> str:
 def run(checks: Checker, args) -> dict:
     summary: dict = {}
 
-    status, payload = checks.json_call("GET", "/api/health")
-    checks.check("GET /api/health", status == 200 and payload == {"status": "ok"}, str(payload))
+    status, payload = checks.json_call("GET", "/health")
+    checks.check(
+        "GET /health",
+        status == 200
+        and isinstance(payload, dict)
+        and payload.get("status") == "ok"
+        and payload.get("service") == "transferhub"
+        and isinstance(payload.get("version"), str)
+        and bool(payload.get("version")),
+        str(payload),
+    )
     if status == 0:
         print(f"\nABORT: {checks.base} is not reachable. Start it with run.bat.")
         return summary
@@ -183,7 +192,9 @@ def run(checks: Checker, args) -> dict:
         )
 
     status, payload = checks.json_call(
-        "POST", "/api/transcribe", {"path": str(Path(args.file).parent / "definitely-missing.flac")}
+        "POST",
+        "/api/transcribe",
+        {"path": str(Path(args.file).parent / "definitely-missing.flac")},
     )
     checks.check("missing file rejected with 422", status == 422, str(payload)[:100])
 
@@ -209,9 +220,12 @@ def run(checks: Checker, args) -> dict:
     thread.join()
     if status == 409:
         checks.check(
-            "second concurrent request gets 409",
-            payload == {"detail": "Inference engine is busy"},
-            str(payload)[:80],
+            "second concurrent request gets 409 ENGINE_BUSY",
+            isinstance(payload, dict)
+            and payload.get("code") == "ENGINE_BUSY"
+            and isinstance(payload.get("detail"), str)
+            and bool(payload.get("detail")),
+            str(payload),
         )
         checks.check("first request still succeeds", holder.get("status") == 200)
     else:
@@ -223,7 +237,7 @@ def run(checks: Checker, args) -> dict:
         )
 
     for path, needle in (("/", "local trans api demo"), ("/docs", "swagger")):
-        status, raw = checks.text_call("GET", path)
+        status, raw = checks.request("GET", path)
         checks.check(
             f"GET {path} serves the page",
             status == 200 and needle in raw.lower(),
