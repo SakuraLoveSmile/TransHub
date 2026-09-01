@@ -7,18 +7,13 @@ from pathlib import Path
 from app.schemas.api import InferenceResult
 from app.utils.subtitle import to_srt
 
-# Windows-style paths must work on a POSIX dev machine, so "/" and "\" are both
-# treated as separators here instead of relying on Path semantics.
 SEPARATORS = re.compile(r"[\\/]+")
-
 OUTPUT_TAGS = {"transcribe": "transcribe", "translate": "zh"}
 
 
 def media_basename(path: str) -> str:
     parts = [part for part in SEPARATORS.split(path.strip()) if part]
-    if not parts:
-        return "untitled"
-    return Path(parts[-1]).stem or "untitled"
+    return Path(parts[-1]).stem or "untitled" if parts else "untitled"
 
 
 def write_outputs(
@@ -30,12 +25,8 @@ def write_outputs(
     output_directory.mkdir(parents=True, exist_ok=True)
     stem = media_basename(source_path)
     tag = OUTPUT_TAGS.get(task, task)
-
     json_path = output_directory / f"{stem}.{tag}.json"
     srt_path = output_directory / f"{stem}.{tag}.srt"
-
-    # Explicit LF: the browser's Download SRT is LF, and text mode would write
-    # CRLF on Windows, so the two copies would never compare equal.
     json_path.write_text(
         json.dumps(
             result.model_dump(mode="json", exclude_none=True),

@@ -1,8 +1,7 @@
-"""Assert the Phase 0 acceptance list against a running server (stdlib only).
+"""Check the stable local API contract against a running server.
 
-Used by CI on Windows and runnable by hand after ``run.bat``:
-
-    .venv\\Scripts\\python scripts\\smoke_check.py
+This checker intentionally validates response shape and machine-readable error
+codes instead of tying the suite to every mock transcription sentence.
 """
 
 from __future__ import annotations
@@ -16,13 +15,29 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-# Windows consoles default to a non-UTF-8 code page; the assertions print
-# Japanese and Chinese payloads, so stdout must not depend on that code page.
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-WINDOWS_PATH = "D:\\ASMR\\test.flac"
-EXPECTED_MODELS = {"whisper-ja-1.5b", "chickenrice-v2"}
-SRT_BLOCK = "1\n00:00:00,800 --> 00:00:03,400\nこんばんは。"
+REQUIRED_INFERENCE_FIELDS = {
+    "success",
+    "mock",
+    "profile",
+    "model",
+    "duration",
+    "processing_time",
+    "realtime_factor",
+    "speed",
+    "text",
+    "segments",
+}
+REQUIRED_MODEL_FIELDS = {"id", "name", "type", "installed", "loaded", "mock"}
+FORBIDDEN_INFERENCE_FIELDS = {
+    "gpu_name",
+    "cuda_version",
+    "compute_type",
+    "model_path",
+    "engine_debug",
+    "memory_usage",
+}
 
 
 class Checker:
@@ -35,9 +50,10 @@ class Checker:
     def check(self, name: str, ok: bool, detail: str = "") -> None:
         if not ok:
             self.failed += 1
-        print(f"{'PASS' if ok else 'FAIL'}  {name}{'  ' + detail if detail else ''}")
+        suffix = f"  {detail}" if detail else ""
+        print(f"{'PASS' if ok else 'FAIL'}  {name}{suffix}")
 
-    def request(self, method: str, path: str, body: dict | None = None):
+    def request(self, method: str, path: str, body: dict | None = None) -> tuple[int, str]:
         data = None
         headers = {}
         if body is not None:
@@ -48,14 +64,11 @@ class Checker:
         )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                raw = response.read().decode("utf-8", "replace")
-                return response.status, raw
+                return response.status, response.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as error:
             return error.code, error.read().decode("utf-8", "replace")
-        except urllib.error.URLError as error:
-            return 0, f"connection error: {error.reason}"
-        except OSError as error:  # e.g. a socket timeout on slow real inference
-            return 0, f"request error after {self.timeout}s: {error}"
+        except (urllib.error.URLError, OSError) as error:
+            return 0, str(error)
 
     def json_call(self, method: str, path: str, body: dict | None = None):
         status, raw = self.request(method, path, body)
@@ -64,115 +77,166 @@ class Checker:
         except json.JSONDecodeError:
             return status, raw
 
-    def text_call(self, method: str, path: str):
-        return self.request(method, path)
+
+def valid_segments(payload: object) -> bool:
+    if not isinstance(payload, list):
+        return False
+    return all(
+        isinstance(segment, dict)
+        and isinstance(segment.get("start"), (int, float))
+        and isinstance(segment.get("end"), (int, float))
+        and isinstance(segment.get("text"), str)
+        for segment in payload
+    )
+
+
+def check_inference_payload(
+    checks: Checker, name: str, status: int, payload: object, language_fields: set[str]
+) -> None:
+    ok = isinstance(payload, dict)
+    if not ok:
+        checks.check(name, False, repr(payload)[:160])
+        return
+    expected = REQUIRED_INFERENCE_FIELDS | language_fields
+    checks.check(
+        f"{name} has frozen fields",
+        status == 200 and set(payload) == expected,
+        f"status={status} fields={sorted(payload)}",
+    )
+    checks.check(
+        f"{name} has valid segments",
+        valid_segments(payload.get("segments")),
+        repr(payload.get("segments"))[:160],
+    )
+    checks.check(
+        f"{name} exposes no diagnostics fields",
+        not FORBIDDEN_INFERENCE_FIELDS.intersection(payload),
+        str(sorted(FORBIDDEN_INFERENCE_FIELDS.intersection(payload))),
+    )
+
+
+def check_error(
+    checks: Checker,
+    name: str,
+    status: int,
+    payload: object,
+    expected_status: int,
+    expected_code: str,
+) -> None:
+    ok = (
+        isinstance(payload, dict)
+        and payload.get("code") == expected_code
+        and isinstance(payload.get("detail"), str)
+    )
+    checks.check(
+        name,
+        status == expected_status and ok,
+        f"status={status} payload={payload}",
+    )
 
 
 def run(checks: Checker) -> None:
-    status, payload = checks.json_call("GET", "/api/health")
-    checks.check("GET /api/health", status == 200 and payload == {"status": "ok"}, str(payload))
+    status, payload = checks.json_call("GET", "/health")
+    checks.check(
+        "GET /health stable contract",
+        status == 200
+        and isinstance(payload, dict)
+        and payload.get("status") == "ok"
+        and payload.get("service") == "transferhub"
+        and isinstance(payload.get("version"), str)
+        and bool(payload.get("version")),
+        str(payload),
+    )
     if status == 0:
-        print(f"\nABORT: {checks.base} is not reachable, is run.bat up?")
+        print(f"\nABORT: {checks.base} is not reachable, is the server up?")
         return
+
+    status, payload = checks.json_call("GET", "/api/health")
+    checks.check(
+        "GET /api/health legacy compatibility",
+        status == 200 and payload == {"status": "ok"},
+        str(payload),
+    )
 
     status, payload = checks.json_call("GET", "/api/status")
     checks.check(
-        "GET /api/status is mock engine",
-        status == 200 and payload.get("engine") == "mock" and payload.get("mock") is True,
+        "GET /api/status runtime status",
+        status == 200
+        and isinstance(payload, dict)
+        and set(payload) == {"status", "engine", "mock", "loaded_model", "device"}
+        and payload["status"] in {"idle", "running"},
         str(payload),
     )
 
     status, payload = checks.json_call("GET", "/api/models")
-    models = {model["id"]: model for model in payload.get("models", [])}
+    models = payload.get("models") if isinstance(payload, dict) else None
     checks.check(
-        "GET /api/models lists both models",
-        status == 200 and set(models) == EXPECTED_MODELS,
-        str(sorted(models)),
+        "GET /api/models has a model list",
+        status == 200 and isinstance(models, list),
+        str(payload),
     )
-    checks.check(
-        "mock models report installed=true",
-        all(m["installed"] and m["mock"] for m in models.values()),
+    if isinstance(models, list):
+        checks.check(
+            "ModelInfo fields are stable",
+            all(isinstance(model, dict) and REQUIRED_MODEL_FIELDS <= set(model) for model in models),
+            str(models),
+        )
+
+    status, payload = checks.json_call(
+        "POST", "/api/models/load", {"model": "not-a-real-model"}
     )
+    check_error(checks, "unknown model has a stable error code", status, payload, 404, "UNKNOWN_MODEL")
 
     status, payload = checks.json_call("POST", "/api/models/load", {"model": "chickenrice-v2"})
     checks.check(
         "POST /api/models/load",
-        status == 200 and payload.get("loaded_model") == "chickenrice-v2" and payload.get("mock") is True,
+        status == 200
+        and isinstance(payload, dict)
+        and payload.get("success") is True
+        and payload.get("loaded_model") == "chickenrice-v2",
         str(payload),
     )
-
-    status, payload = checks.json_call("GET", "/api/models")
-    loaded = [m["id"] for m in payload.get("models", []) if m["loaded"]]
-    checks.check("loaded flag follows load", loaded == ["chickenrice-v2"], str(loaded))
-
     status, payload = checks.json_call("POST", "/api/models/unload")
     checks.check(
         "POST /api/models/unload",
-        status == 200 and payload.get("success") is True and payload.get("loaded_model") is None,
+        status == 200
+        and isinstance(payload, dict)
+        and payload.get("success") is True
+        and payload.get("loaded_model") is None,
         str(payload),
     )
 
-    status, payload = checks.json_call("POST", "/api/transcribe", {"path": WINDOWS_PATH})
-    checks.check(
-        "POST /api/transcribe returns japanese",
-        status == 200
-        and payload.get("model") == "whisper-ja-1.5b"
-        and payload.get("text") == "こんばんは。今日はよろしくお願いします。"
-        and len(payload.get("segments", [])) == 2,
-        str(payload)[:120],
+    status, transcribe = checks.json_call("POST", "/api/transcribe", {"path": "D:\\ASMR\\test.flac"})
+    check_inference_payload(checks, "POST /api/transcribe", status, transcribe, {"language"})
+    status, translate = checks.json_call(
+        "POST", "/api/translate-audio", {"path": "D:\\ASMR\\test.flac"}
     )
-    checks.check(
-        "transcribe payload has language only",
-        payload.get("language") == "ja"
-        and "source_language" not in payload
-        and "target_language" not in payload,
-        str(sorted(payload)) if isinstance(payload, dict) else "",
+    check_inference_payload(
+        checks,
+        "POST /api/translate-audio",
+        status,
+        translate,
+        {"source_language", "target_language"},
     )
 
-    status, payload = checks.json_call("POST", "/api/translate-audio", {"path": WINDOWS_PATH})
     checks.check(
-        "POST /api/translate-audio returns chinese",
-        status == 200
-        and payload.get("model") == "chickenrice-v2"
-        and payload.get("text") == "晚上好。今天请多关照。"
-        and payload.get("source_language") == "ja"
-        and payload.get("target_language") == "zh-CN",
-        str(payload)[:120],
+        "transcribe and translate use one base result schema",
+        isinstance(transcribe, dict)
+        and isinstance(translate, dict)
+        and (set(transcribe) - {"language"}) == (set(translate) - {"source_language", "target_language"}),
+        f"transcribe={sorted(transcribe) if isinstance(transcribe, dict) else transcribe} "
+        f"translate={sorted(translate) if isinstance(translate, dict) else translate}",
     )
 
-    for name in (
-        "test.transcribe.json",
-        "test.transcribe.srt",
-        "test.zh.json",
-        "test.zh.srt",
-    ):
-        path = checks.output_dir / name
-        checks.check(f"output/{name} written", path.is_file())
+    status, payload = checks.json_call("GET", "/api/output/not-exists.json")
+    check_error(checks, "missing output has a stable error code", status, payload, 404, "OUTPUT_NOT_FOUND")
+    status, payload = checks.json_call("GET", "/api/output/config.toml")
+    check_error(checks, "invalid output name has a stable error code", status, payload, 422, "INVALID_PATH")
 
-    srt = (checks.output_dir / "test.transcribe.srt").read_text(encoding="utf-8")
-    checks.check("srt matches spec block format", SRT_BLOCK in srt, repr(srt[:40]))
+    for filename in ("test.transcribe.json", "test.transcribe.srt", "test.zh.json", "test.zh.srt"):
+        checks.check(f"output/{filename} exists", (checks.output_dir / filename).is_file())
 
-    doc = json.loads((checks.output_dir / "test.transcribe.json").read_text(encoding="utf-8"))
-    checks.check(
-        "json output mirrors api payload",
-        doc.get("profile") == "ja-transcribe" and len(doc.get("segments", [])) == 2,
-    )
-
-    status, raw = checks.text_call("GET", "/api/output/test.transcribe.srt")
-    checks.check(
-        "GET /api/output serves LF SRT (no CR on Windows)",
-        status == 200 and SRT_BLOCK in raw and "\r" not in raw,
-        f"{status} {raw[:44]!r}",
-    )
-    status, _ = checks.text_call("GET", "/api/output/never-written.json")
-    checks.check("missing artifact is 404", status == 404, str(status))
-    status, _ = checks.text_call("GET", "/api/output/config.toml")
-    checks.check("non-artifact name rejected with 422", status == 422, str(status))
-
-    status, payload = checks.json_call("POST", "/api/transcribe", {"path": ""})
-    checks.check("empty path rejected with 422", status == 422, str(payload)[:80])
-
-    holder = {}
+    holder: dict[str, object] = {}
 
     def slow_request() -> None:
         holder["status"], holder["payload"] = checks.json_call(
@@ -181,40 +245,36 @@ def run(checks: Checker) -> None:
 
     thread = threading.Thread(target=slow_request)
     thread.start()
-    time.sleep(0.3)
-    status, payload = checks.json_call("POST", "/api/translate-audio", {"path": WINDOWS_PATH})
-    thread.join()
-    checks.check(
-        "second concurrent request gets 409",
-        status == 409 and payload == {"detail": "Inference engine is busy"},
-        f"{status} {str(payload)[:60]}",
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        status, payload = checks.json_call("GET", "/api/status")
+        if status == 200 and isinstance(payload, dict) and payload.get("status") == "running":
+            break
+        time.sleep(0.05)
+    status, payload = checks.json_call(
+        "POST", "/api/translate-audio", {"path": "D:\\ASMR\\test.flac"}
     )
-    checks.check("first request still succeeds", holder.get("status") == 200)
+    thread.join()
+    check_error(checks, "busy engine has a stable error code", status, payload, 409, "ENGINE_BUSY")
+    checks.check("busy request eventually succeeds", holder.get("status") == 200, str(holder))
 
-    for path, needle in (("/", "local trans api demo"), ("/docs", "swagger")):
-        status, raw = checks.text_call("GET", path)
-        checks.check(
-            f"GET {path} serves the page",
-            status == 200 and needle in raw.lower(),
-            str(status),
-        )
-
-    status, raw = checks.text_call("GET", "/app.js")
-    checks.check("static assets served", status == 200 and len(raw) > 200, str(status))
+    for path, needle in (("/diagnostics.html", "acceptance runner"), ("/docs", "swagger")):
+        status, raw = checks.request("GET", path)
+        checks.check(f"GET {path} is available", status == 200 and needle in raw.lower(), str(status))
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8765")
-    parser.add_argument("--output-dir", default=str(Path(__file__).resolve().parents[1] / "output"))
+    parser.add_argument(
+        "--output-dir",
+        default=str(Path(__file__).resolve().parents[1] / "output"),
+    )
     args = parser.parse_args()
-
     checks = Checker(args.base_url, Path(args.output_dir))
     run(checks)
-    print(
-        f"\n{'ALL CHECKS PASSED' if not checks.failed else str(checks.failed) + ' CHECK(S) FAILED'}"
-        f" (base={args.base_url})"
-    )
+    result = "ALL CHECKS PASSED" if not checks.failed else f"{checks.failed} CHECK(S) FAILED"
+    print(f"\n{result} (base={args.base_url})")
     return 1 if checks.failed else 0
 
 

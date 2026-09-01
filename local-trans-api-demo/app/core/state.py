@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from dataclasses import dataclass, field
 
@@ -7,8 +9,6 @@ from app.engines.base import BaseInferenceEngine
 
 @dataclass
 class AppState:
-    """Single-process demo state: one engine, one inference slot."""
-
     config: AppConfig
     engine: BaseInferenceEngine
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)

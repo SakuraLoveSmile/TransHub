@@ -1,18 +1,16 @@
+"""Schemas for the stable local ``/api/*`` compatibility surface."""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, field_validator
 
-from app.schemas.health import HealthResponse, LegacyHealthResponse
-
 
 class InferenceRequest(BaseModel):
-    # Mock mode only requires a non-empty path; existence checks come with the
-    # real engine so the demo also runs on macOS and in CI.
     path: str
 
     @field_validator("path")
     @classmethod
-    def _path_not_blank(cls, value: str) -> str:
+    def path_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("path must not be empty")
         return value
@@ -29,15 +27,12 @@ class InferenceResult(BaseModel):
     mock: bool
     profile: str
     model: str
-
     duration: float
     processing_time: float
     realtime_factor: float
     speed: float
-
     text: str
     segments: list[Segment]
-
     language: str | None = None
     source_language: str | None = None
     target_language: str | None = None
@@ -48,7 +43,7 @@ class ModelLoadRequest(BaseModel):
 
     @field_validator("model")
     @classmethod
-    def _model_not_blank(cls, value: str) -> str:
+    def model_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("model must not be empty")
         return value
@@ -56,12 +51,11 @@ class ModelLoadRequest(BaseModel):
 
 class DownloadRequest(BaseModel):
     model: str
-    # Empty means "use whatever HF_ENDPOINT the server was started with".
     endpoint: str = ""
 
     @field_validator("model")
     @classmethod
-    def _model_not_blank(cls, value: str) -> str:
+    def model_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
             raise ValueError("model must not be empty")
         return value

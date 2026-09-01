@@ -1,9 +1,5 @@
 name: Windows smoke test
 
-# Verifies the Phase 0 acceptance list on real Windows: setup.bat creates the
-# venv, run.bat starts the server, then scripts/smoke_check.py asserts every
-# API / UI entry point and the JSON + SRT files on disk.
-
 on:
   push:
     branches: [main]
@@ -16,9 +12,9 @@ permissions:
   contents: read
 
 jobs:
-  phase0:
+  m0:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: local-trans-api-demo
@@ -26,98 +22,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show available Python launchers
-        shell: cmd
-        run: |
-          where py || echo [ci] no py launcher on PATH
-          py --list-paths || echo [ci] py --list-paths unavailable
-          where python || echo [ci] no python on PATH
-
-      - name: Run setup.bat
+      - name: Set up the runtime
         shell: cmd
         run: |
           call setup.bat
           if errorlevel 1 exit /b 1
 
-      - name: Verify .venv was created
+      - name: Run tests
         shell: cmd
         run: |
-          if not exist ".venv\Scripts\python.exe" (
-            echo [ci] .venv\Scripts\python.exe missing after setup.bat
-            exit /b 1
-          )
-          .venv\Scripts\python --version
-          .venv\Scripts\python -m pip list
+          .venv\Scripts\python -m pip install -r requirements-dev.txt
+          if errorlevel 1 exit /b 1
+          .venv\Scripts\python -m pytest
 
-      # Must stay one step: the runner kills a step's child processes when it
-      # exits, so a server started here has to serve the smoke check here too.
-      - name: Start server with run.bat and run smoke check
+      - name: Start server and check health
         shell: pwsh
         run: |
-          $log = Join-Path $env:RUNNER_TEMP "server.log"
-          $err = Join-Path $env:RUNNER_TEMP "server.err"
-          $pidFile = Join-Path $env:RUNNER_TEMP "server.pid"
           $server = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", "run.bat" `
-            -WorkingDirectory $PWD.Path -PassThru -WindowStyle Hidden `
-            -RedirectStandardOutput $log -RedirectStandardError $err
-          $server.Id | Set-Content $pidFile
-
-          $healthy = $false
-          for ($attempt = 0; $attempt -lt 60; $attempt++) {
-            Start-Sleep -Seconds 1
-            try {
-              $health = Invoke-WebRequest -Uri "http://127.0.0.1:8765/api/health" -UseBasicParsing -TimeoutSec 3
-              if ($health.StatusCode -eq 200) {
-                Write-Host "[ci] server up (pid $($server.Id)) after $($attempt + 1)s"
-                $healthy = $true
-                break
+            -WorkingDirectory $PWD.Path -PassThru -WindowStyle Hidden
+          try {
+            $healthy = $false
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:8765/health" `
+                  -UseBasicParsing -TimeoutSec 3
+                if ($response.StatusCode -eq 200) {
+                  $body = $response.Content | ConvertFrom-Json
+                  if ($body.status -eq "ok" -and $body.service -eq "transferhub") {
+                    $healthy = $true
+                    break
+                  }
+                }
+              } catch {
+                if ($server.HasExited) { break }
               }
-            } catch {
-              if (-not $server.WaitForExit(100)) { continue }
-              Write-Host "[ci] run.bat exited early with code $($server.ExitCode)"
-              break
+            }
+            if (-not $healthy) {
+              throw "TransferHub did not pass GET /health"
+            }
+
+            & (Join-Path $PWD ".venv\\Scripts\\python.exe") "scripts\\smoke_check.py" `
+              --base-url "http://127.0.0.1:8765"
+            if ($LASTEXITCODE -ne 0) {
+              throw "TransferHub smoke_check.py failed with exit code $LASTEXITCODE"
+            }
+          } finally {
+            if (-not $server.HasExited) {
+              taskkill /PID $server.Id /T /F 2>$null | Out-Null
             }
           }
-
-          $code = 0
-          if ($healthy) {
-            & (Join-Path $PWD ".venv\Scripts\python.exe") "scripts\smoke_check.py" `
-              --base-url http://127.0.0.1:8765
-            $code = $LASTEXITCODE
-          } else {
-            Write-Host "[ci] server never became healthy"
-            $code = 1
-          }
-
-          taskkill /PID $server.Id /T /F 2>$null | Out-Null
-          Write-Host "[ci] server log tail:"
-          Get-Content $log, $err -Tail 30 -ErrorAction SilentlyContinue
-          exit $code
-
-      - name: Stop server
-        if: always()
-        shell: pwsh
-        run: |
-          $pidFile = Join-Path $env:RUNNER_TEMP "server.pid"
-          if (-not (Test-Path $pidFile)) { exit 0 }
-          $serverId = Get-Content $pidFile
-          taskkill /PID $serverId /T /F 2>$null | Out-Null
-          exit 0
-
-      - name: Upload server log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-server-log
-          path: |
-            ${{ runner.temp }}/server.log
-            ${{ runner.temp }}/server.err
-          if-no-files-found: ignore
-
-      - name: Upload generated output files
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-output
-          path: local-trans-api-demo/output/
-          if-no-files-found: ignore

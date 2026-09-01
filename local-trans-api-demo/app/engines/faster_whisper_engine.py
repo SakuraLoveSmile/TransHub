@@ -6,12 +6,7 @@ import logging
 import time
 from pathlib import Path
 
-from app.core.config import (
-    MODEL_CATALOG,
-    AppConfig,
-    Profile,
-    model_dir_is_complete,
-)
+from app.core.config import MODEL_CATALOG, AppConfig, Profile, model_dir_is_complete
 from app.core.errors import (
     InferenceError,
     InvalidPathError,
@@ -25,7 +20,6 @@ from app.engines.base import BaseInferenceEngine, build_result
 from app.schemas.api import InferenceResult, Segment
 
 logger = logging.getLogger("app.engine.faster-whisper")
-
 SUPPORTED_SUFFIXES = {
     ".wav",
     ".flac",
@@ -38,8 +32,6 @@ SUPPORTED_SUFFIXES = {
     ".mkv",
     ".webm",
 }
-
-# Spec section 45 defaults; VAD behaviour is what Phase 6 tunes for ASMR.
 TRANSCRIBE_OPTIONS = {
     "beam_size": 1,
     "condition_on_previous_text": False,
@@ -48,13 +40,12 @@ TRANSCRIBE_OPTIONS = {
 
 
 def select_device(device: str = "auto", compute_type: str = "default") -> tuple[str, str]:
-    """Resolve ``auto`` to CUDA when present, otherwise CPU (the fallback path)."""
     if device == "auto":
         try:
             import ctranslate2
 
             has_cuda = ctranslate2.get_cuda_device_count() > 0
-        except Exception:  # a broken CUDA stack must not break CPU inference
+        except Exception:  # noqa: BLE001 - CUDA fallback must survive broken runtimes
             has_cuda = False
         device = "cuda" if has_cuda else "cpu"
     if compute_type == "default":
@@ -63,11 +54,7 @@ def select_device(device: str = "auto", compute_type: str = "default") -> tuple[
 
 
 class FasterWhisperEngine(BaseInferenceEngine):
-    """faster-whisper / CTranslate2 backend.
-
-    Loads only ``models/<model_id>`` prepared by scripts/download_models.py, so
-    inference never triggers a download.
-    """
+    """Optional real backend with the same ``InferenceResult`` builder."""
 
     name = "faster-whisper"
     mock = False
@@ -90,25 +77,11 @@ class FasterWhisperEngine(BaseInferenceEngine):
             raise UnknownModelError(f"Unknown model: {model_id}")
         directory = self.model_directory(model_id)
         if not self.is_installed(model_id):
-            raise ModelNotInstalledError(
-                f"Model not installed: {model_id}. Run "
-                f"scripts/download_models.py --model {model_id} first."
-            )
+            raise ModelNotInstalledError(f"Model not installed: {model_id}")
         try:
             from faster_whisper import WhisperModel
         except ImportError as error:
-            raise ModelLoadError(
-                "faster-whisper is not installed. Run: "
-                ".venv\\Scripts\\pip install -r requirements-ai.txt"
-            ) from error
-
-        logger.info(
-            "Loading %s from %s (device=%s compute_type=%s)",
-            model_id,
-            directory,
-            self.device,
-            self.compute_type,
-        )
+            raise ModelLoadError("faster-whisper is not installed") from error
         try:
             self.model = await asyncio.to_thread(
                 WhisperModel,
@@ -118,9 +91,7 @@ class FasterWhisperEngine(BaseInferenceEngine):
             )
         except Exception as error:
             self.model = None
-            logger.exception("Model load failed for %s", model_id)
-            reason = " ".join(str(error).split())[:160]
-            raise ModelLoadError(f"Model load failed: {model_id} ({reason})") from error
+            raise ModelLoadError(f"Model load failed: {model_id}") from error
         self.loaded_model = model_id
 
     async def unload_model(self) -> None:
@@ -133,15 +104,13 @@ class FasterWhisperEngine(BaseInferenceEngine):
         if resolved is None:
             raise UnknownProfileError(f"Unknown profile: {profile}")
         media = self._validated_media(path)
-
         started = time.perf_counter()
         try:
             segments, duration = await asyncio.to_thread(self._infer, media, resolved)
         except Exception as error:
             logger.exception("Inference failed for %s", path)
-            raise InferenceError(f"Inference failed: {error}") from error
+            raise InferenceError("Inference failed") from error
         processing_time = round(time.perf_counter() - started, 3)
-
         return build_result(
             resolved,
             mock=False,
@@ -152,13 +121,8 @@ class FasterWhisperEngine(BaseInferenceEngine):
         )
 
     def _infer(self, media: Path, profile: Profile) -> tuple[list[Segment], float]:
-        # Runs in a worker thread: faster-whisper yields segments lazily, so
-        # consuming the generator here keeps /api/status responsive.
         segments, info = self.model.transcribe(
-            str(media),
-            task=profile.task,
-            language=profile.language,
-            **TRANSCRIBE_OPTIONS,
+            str(media), task=profile.task, language=profile.language, **TRANSCRIBE_OPTIONS
         )
         items = [
             Segment(
@@ -168,19 +132,14 @@ class FasterWhisperEngine(BaseInferenceEngine):
             )
             for segment in segments
         ]
-        if info.duration:
-            duration = float(info.duration)
-        elif items:
-            duration = items[-1].end
-        else:
-            duration = 0.0
+        duration = (
+            float(info.duration) if info.duration else (items[-1].end if items else 0.0)
+        )
         return items, duration
 
     def _validated_media(self, path: str) -> Path:
         candidate = Path(path)
-        if candidate.is_dir():
-            raise InvalidPathError(f"Path is a directory, not a file: {path}")
-        if not candidate.is_file():
+        if candidate.is_dir() or not candidate.is_file():
             raise InvalidPathError(f"File not found: {path}")
         if candidate.suffix.lower() not in SUPPORTED_SUFFIXES:
             raise UnsupportedFileError(

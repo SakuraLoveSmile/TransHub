@@ -1,316 +1,172 @@
-# Local Trans API Demo
+# TransferHub
 
-Windows 专用、本机运行的转录 / 语音翻译 API Demo。
+TransferHub 是 Windows 本地运行的转录 / 翻译 API 中枢，为本机其他服务提供统一入口。
 
-- **Phase 0（Mock）**已完成：不依赖 CUDA、真实模型或 Hugging Face，即可跑通 API、Web UI、
-  字幕数据结构与 JSON / SRT 输出链路。
-- **Phase 1（FasterWhisperEngine）**已实现：真实 CTranslate2 推理已在本机 CPU 上跑通
-  （见「真实引擎」一节）。
-- **Phase 2（`whisper-ja-1.5b` 真实转录）**代码与验收脚本已就绪：设备 / `compute_type`
-  开关加上 `scripts/phase2_check.py`。3.1 GB 目标模型与 NVIDIA 分支未在本机执行，
-  §48 需按「Phase 2 验收」在 Windows 真机打勾；日语与 ChickenRice 翻译质量属 Phase 3。
+## 当前阶段：API Contract v1 + M0 Mock Task Lifecycle
 
-```text
-Web UI → FastAPI → InferenceService → Engine Interface → MockEngine
-                                                   └→ FasterWhisperEngine
-```
+当前版本只验证本地 HTTP 服务的基础结构：
 
-切引擎只改 `[inference] engine` 一行（或另存一份配置用 `TRANS_HUB_CONFIG` 指过去），
-API、Schema、前端与输出格式完全不变。
+- FastAPI + Uvicorn 服务可以启动和退出。
+- `GET /health` 提供基础健康检查。
+- 转录和翻译都有独立的 Provider 边界。
+- 默认使用 Mock Provider，不加载真实 AI 模型。
+- `/api/*` 提供稳定的客户端 API Contract v1；默认使用 Mock Engine。
+- `/v1` 的 SAK-31/32 任务生命周期接口继续保留，不在本阶段迁移。
 
-## 快速开始（Windows）
+SAK-31 定义 HTTP、请求、响应和错误模型；SAK-32 增加内存任务生命周期，但不引入数据库、消息队列或真实 AI Provider。
+
+## Windows PowerShell 启动
+
+在 PowerShell 中执行：
 
 ```powershell
-setup.bat
-run.bat
+cd .\local-trans-api-demo
+.\setup.bat
+.\run.bat
 ```
 
-打开：
+服务默认监听 `127.0.0.1:8765`。`run.bat` 会在前台运行服务，按 `Ctrl+C` 可正常停止。
 
-- Web UI：<http://127.0.0.1:8765/>
-- API Docs：<http://127.0.0.1:8765/docs>
+也可以直接使用 Python 模块入口：
 
-`setup.bat` 只安装 `requirements.txt`（FastAPI / Uvicorn / Pydantic）。Mock 模式需要 Python
-3.11+（读取 `config.toml` 用到标准库 `tomllib`），推荐 3.12。
-
-非 Windows 环境下等价命令：
-
-```bash
-python3.12 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8765
+```powershell
+python -m app.main
 ```
 
-## API
+运行命令前请确保当前目录是 `local-trans-api-demo`，并已安装 `requirements.txt` 中的依赖。
 
-Base URL：`http://127.0.0.1:8765`
+## 配置
+
+配置通过环境变量提供，默认值如下：
+
+```text
+TRANSFERHUB_HOST=127.0.0.1
+TRANSFERHUB_PORT=8765
+TRANSFERHUB_LOG_LEVEL=INFO
+TRANSFERHUB_MOCK_TRANSCRIPTION_DELAY=0.2
+TRANSFERHUB_MOCK_TRANSCRIPTION_FAIL=false
+```
+
+PowerShell 示例：
+
+```powershell
+$env:TRANSFERHUB_HOST = "127.0.0.1"
+$env:TRANSFERHUB_PORT = "8765"
+$env:TRANSFERHUB_LOG_LEVEL = "INFO"
+python -m app.main
+```
+
+默认只监听本机回环地址，不暴露到局域网。可复制 `.env.example` 作为配置参考；当前 Demo 不自动读取 `.env` 文件。
+
+## API Contract
+
+完整字段、错误码和 Stable / Legacy / Diagnostics 边界见 [`docs/api-contract-v1.md`](docs/api-contract-v1.md)。
+
+### Stable API v1
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/health` | 存活检查 |
-| GET | `/api/status` | 引擎、忙闲状态、已加载模型 |
-| GET | `/api/models` | 模型列表（Mock 模式 `installed` 恒为 `true`） |
-| POST | `/api/models/load` | 加载模型，body `{"model": "chickenrice-v2"}` |
+| GET | `/health` | 正式健康检查 |
+| GET | `/api/status` | 运行状态 |
+| GET | `/api/models` | 模型列表 |
+| POST | `/api/models/load` | 加载模型 |
 | POST | `/api/models/unload` | 卸载模型 |
-| POST | `/api/transcribe` | 日语音频转写，profile `ja-transcribe` |
-| POST | `/api/translate-audio` | 日语 → 中文语音翻译，profile `ja-zh` |
-| GET | `/api/output/<name>` | 只读回 `output/` 里的 `<name>.json` / `.srt`，供验收页比对落盘结果 |
-| GET | `/api/setup/env` | 环境体检：AI 依赖能否 import、CUDA 设备数、生效的 HF 端点、磁盘余量、每个模型的齐全度与已下字节 |
-| POST | `/api/setup/download` | 启动后台下载 body `{"model": "...", "endpoint": ""}`，`endpoint` 可填镜像 |
-| GET | `/api/setup/download` | 当前下载任务进度（字节 / 总量 / 速度 / 状态 / 错误） |
+| POST | `/api/transcribe` | 音频转录 |
+| POST | `/api/translate-audio` | 音频翻译 |
+| GET | `/api/output/{name}` | 读取 JSON/SRT 产物 |
 
-推理请求：
+### Legacy API
+
+`GET /api/health` 继续保留，返回 `{"status":"ok"}`，仅用于旧客户端兼容。新客户端必须使用 `GET /health`。
+
+### Local Setup / Diagnostics API
+
+`GET /api/setup/env`、`POST /api/setup/download`、`GET /api/setup/download` 和 `/diagnostics.html` 仅供本机设置与诊断，不属于 Stable API v1，不承诺长期兼容。
+
+`/api/*` 项目错误返回 `{ "code": "...", "detail": "..." }`；FastAPI/Pydantic 自动生成的校验错误保持原有格式。
+
+## Health Check
+
+服务启动后执行：
+
+```powershell
+curl http://127.0.0.1:8765/health
+```
+
+预期返回 HTTP 200：
 
 ```json
-{ "path": "D:\\ASMR\\test.flac" }
+{
+  "status": "ok",
+  "service": "transferhub",
+  "version": "0.1.0"
+}
 ```
 
-## Mock 行为
+## Existing task API (`/v1`)
 
-- 不读取媒体文件，也不检查文件是否存在；只要求 `path` 非空（空字符串返回 `422`）。
-  因此 macOS / Linux / CI 环境可以完整跑通 Demo。
-- 固定 `1.5 s` 推理延迟、`0.3 s` 加载延迟，用于验证 Loading / Processing / Busy 状态；
-  数值不随机，保证测试稳定。
-- 只允许一个推理任务：占用期间第二个请求返回 `409 {"detail": "Inference engine is busy"}`。
-- 转录固定返回日文字幕，翻译固定返回中文字幕，字段结构与真实模型阶段完全一致。
-
-## 输出文件
-
-每次推理都会真实写入 `output/`，文件名取自路径最后一段（Windows 反斜杠路径同样可用）：
-
-```text
-D:\ASMR\RJ123\track01.flac  →  output/track01.transcribe.json / .srt   （转录）
-D:\ASMR\test.flac           →  output/test.zh.json / .srt              （翻译）
-```
-
-产物统一按 LF 写入（Windows 也一样），所以页面上 Download SRT 得到的内容与服务器
-`output/` 里的文件逐字节相同；`smoke_check.py` 有一条「serves LF SRT (no CR on Windows)」
-专门守这一点——它是 CI 在 windows-latest 上跑出来的真实回归。
-
-## 脚本
-
-| 脚本 | 用途 | 依赖 |
+| 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `scripts/test_inference.py` | 不经 HTTP，在进程内复用 `InferenceService` 跑一段音频 | 当前配置指定的引擎 |
-| `scripts/download_models.py` | 下载 CTranslate2 模型到 `models/<model_id>/` | `requirements-ai.txt` |
-| `scripts/smoke_check.py` | 断言 §38 的 Phase 0 验收项（打 Mock 引擎的服务） | 标准库 |
-| `scripts/phase2_check.py` | 断言 §48 的 Phase 2 验收项（真实引擎 + 真实音频） | 标准库 |
+| POST | `/v1/transcriptions` | 校验请求、创建异步任务并返回初始 `queued` 状态，状态码 `202` |
+| GET | `/v1/tasks/{task_id}` | 查询内存中的任务状态和结果；不存在时返回 `404` |
+| POST | `/v1/translations` | 返回可预测的任务翻译 Contract，状态码 `200` |
+
+这些接口保持现状；本阶段不做 `/v1/` URL 前缀迁移。新的稳定客户端音频翻译接口是 `/api/translate-audio`。
+
+`/v1` 校验错误统一返回 `error.code`、`error.message` 和 `error.details`，不会返回 FastAPI 默认的 `detail` 数组。
+
+### Mock 转录任务
+
+转录任务会异步经历 `queued → running → completed`，Provider 异常时经历 `queued → running → failed`。Mock 不读取或解码输入文件，只校验 `input.type` 为 `file` 且 `input.path` 非空。
+
+`TRANSFERHUB_MOCK_TRANSCRIPTION_DELAY` 控制模拟延迟，单位为秒，默认 `0.2`；`TRANSFERHUB_MOCK_TRANSCRIPTION_FAIL=true` 可用于验证失败状态。任务只保存在内存中，服务重启后会丢失。
+
+## 测试
+
+安装测试依赖并运行：
 
 ```powershell
-.venv\Scripts\python scripts\test_inference.py --profile ja-transcribe --file "D:\ASMR\test.flac"
-.venv\Scripts\python scripts\smoke_check.py
-.venv\Scripts\python scripts\phase2_check.py --file "D:\ASMR\test.flac" --expect-device cuda
+python -m pip install -r requirements-dev.txt
+python -m pytest
 ```
 
-两个检查脚本逐条打印 `PASS` / `FAIL` 并在有失败时以非 0 退出，可以直接进 CI。
-
-## 可视化验收（Web）
-
-同样的验收做成了页面：<http://127.0.0.1:8765/diagnostics.html>（首页标题下有入口）。
-选套件 → 填媒体路径 → Run，每条断言实时变成 pass / fail / inconclusive，行可展开看请求结果，
-底部 Summary 给出 `engine / device / load_seconds / duration / processing_time / speed /
-segments / first_text`，可一键复制。
-
-- **Phase 0 · Mock**：15 条，覆盖端点、模型目录、load/unload、日/中固定字幕、
-  `output/` 落盘与 JSON 一致、空路径 422、并发 409、页面可访问。
-- **Phase 2 · Real**：15 条，把固定字幕换成真实断言——schema 字段集与 Mock 相同、段数 > 0、
-  时间轴递增有效、`text` 等于分段拼接、指标符合公式，另加 device、模型未下载、
-  文件不存在 422、非音频 400。
-
-断言逻辑与 `smoke_check.py` / `phase2_check.py` 一致，两者并存：页面给人看，脚本给 CI 跑。
-落盘相关的三条靠 `GET /api/output/<name>` 读回文件，浏览器自己看不到服务器磁盘。
-
-页面顶部的 **Setup** 区负责「跑之前先看清环境」：
-
-- 体检一行行列出：生效的配置文件、engine / device / compute_type、`faster_whisper` 等三个
-  依赖能否 import、CUDA 设备数、当前 HF 端点、模型目录所在盘的剩余空间。
-- 每个模型一行，显示仓库地址、已落盘字节、齐全度徽章（缺哪几个文件直接写出来），
-  点 **Download** 由服务端后台下载，进度条按秒刷新字节 / 总量 / 速度；
-  中断或失败后再点会**续传**而不是重来。
-- 镜像地址填在 HF endpoint 框里随请求下发，留空则用服务器启动时的 `HF_ENDPOINT`。
-- 依赖缺失时页面会把该执行的那条命令原样显示出来（`pip install -r requirements-ai.txt`）。
-
-仍然留在命令行的只有两件事：第一次 `setup.bat` / `run.bat`（服务没起来就没有网页），
-以及装 Python 依赖。让服务端自己跑 pip 等于给一个「接受本地路径的本地 API」加上执行任意
-命令的能力，与它的定位相冲突，所以这一步刻意不做成按钮。
-
-device 只做**呈现**：页面显示当前 `cpu` / `cuda`，期望值不符时提示
-「改 `[faster_whisper] device` 后重启 `run.bat`」，不提供运行时切换。
-Stop 只取消浏览器请求，服务端会把当前推理跑完并继续占用唯一推理槽——页面在停用时和
-运行前（`engine idle before the run`）都会明确提示这一点。
-
-代码在 `static/diagnostics.html` 与 `static/diagnostics.js`，无框架，样式复用 `style.css`。
-
-## CI（Windows 实测）
-
-`setup.bat` 与 `run.bat` 只能在 Windows 上验证，因此由仓库根的
-`.github/workflows/windows-smoke.yml` 在 `windows-latest` 上跑：`setup.bat` → 检查
-`.venv\Scripts\python.exe` → 用 `run.bat` 起服务 → `scripts/smoke_check.py` 断言全部
-端点、422、并发 409 以及 `output/` 里的 JSON / SRT 内容。push 到 `main` 且改动落在
-`local-trans-api-demo/**` 时自动触发，也可手动 dispatch；日志与 `output/` 作为 artifact 上传。
-
-注意起服务与断言必须写在同一个 step：Actions 会在 step 结束时回收该 step 派生的进程树，
-分两个 step 写会让服务在下一步开始前就被杀掉。
-
-## 真实引擎（faster-whisper）
-
-AI 依赖与模型都是可选项，装完才谈得上真实推理：
-
-```powershell
-.venv\Scripts\pip install -r requirements-ai.txt
-.venv\Scripts\python scripts\download_models.py
-```
-
-`setup.bat` 不会安装 AI 依赖，Mock 模式始终可以独立运行。
-
-下载目标目录固定为 `models/<model_id>/`：
-
-```text
-models/
-├── whisper-ja-1.5b/     ← TransWithAI/whisper-ja-1.5B-ct2
-└── chickenrice-v2/      ← chickenrice0721/whisper-large-v2-translate-zh-v0.2-st-ct2
-```
-
-判断「已下载」的标准是 `model.bin` + `config.json` + `tokenizer.json` 三个文件齐全，
-因此中断的半成品目录会被识别为未安装并重新下载，而不是被当成已完成。
-`/api/models` 的 `installed` 用的就是同一个判断。
-
-访问不了 huggingface.co 时可以走镜像，无需改代码：
-
-```powershell
-$env:HF_ENDPOINT = "https://hf-mirror.com"
-```
-
-切换到真实引擎只改一行配置：
-
-```toml
-[inference]
-engine = "faster-whisper"
-```
-
-行为差异：
-
-- 设备选择默认 `auto`：`ctranslate2.get_cuda_device_count() > 0` 时用 `cuda` + `float16`，
-  否则退回 `cpu` + `int8`；实际取值出现在 `/api/status` 的 `device` 字段。想固定设备
-  （例如在有 GPU 的机器上专测 CPU 回退）就加一节配置：
-
-  ```toml
-  [faster_whisper]
-  device = "cpu"          # auto | cpu | cuda
-  compute_type = "int8"   # default 时按设备自动取 float16 / int8，其余值直接交给 CTranslate2
-  ```
-
-  `device` 写错会在启动时直接报错，不会拖到第一次推理。
-- 只从本地目录加载，推理过程不会触发任何下载（`HF_HUB_OFFLINE=1` 下已验证）。
-- 只有真实引擎检查媒体文件：不存在或指向目录 → `422`，扩展名不支持 → `400`
-  （支持 `wav flac mp3 m4a aac ogg opus mp4 mkv webm`），模型未下载 → `404`，
-  加载失败 → `503`。Mock 模式仍然完全不看文件。
-- 模型加载与推理跑在工作线程里，推理期间 `/api/status` 依旧毫秒级返回。
-
-想用另一份配置启动而不改动仓库里的 `config.toml`：
-
-```powershell
-$env:TRANS_HUB_CONFIG = "D:\dev\config.real.toml"
-```
-
-`MockEngine` 会长期保留：前端开发、API 联调、CI 以及没有 NVIDIA GPU 的环境都用它，
-不会因为真实模型接入成功而删除。
-
-## Phase 2 验收（Windows + NVIDIA）
-
-仓库里的 `config.toml` 固定保持 `engine = "mock"`（CI 与无 GPU 环境依赖它），真机验收不必
-改动仓库文件：
-
-```powershell
-.venv\Scripts\pip install -r requirements-ai.txt
-.venv\Scripts\python scripts\download_models.py --model whisper-ja-1.5b   # model.bin 约 3.1 GB
-copy config.toml config.real.toml
-notepad config.real.toml                       # engine = "faster-whisper"，按需加 [faster_whisper]
-$env:TRANS_HUB_CONFIG = "$PWD\config.real.toml"
-run.bat
-```
-
-直接改 `config.toml` 那一行也完全可以，只是别把 `faster-whisper` 提交回去。
-
-模型下载也可以不碰终端：打开验收页的 Setup 区，点对应模型的 **Download**，进度与失败原因都
-在页面上；两条路走的是同一套齐全度判断。
-
-必须跑两遍：GPU 一遍、强制 CPU 回退一遍。
-
-```powershell
-.venv\Scripts\python scripts\phase2_check.py --file "D:\ASMR\test.flac" --expect-device cuda
-# 配置里写 device = "cpu" 重启后再跑一遍
-.venv\Scripts\python scripts\phase2_check.py --file "D:\ASMR\test.flac" --expect-device cpu
-```
-
-全绿时末尾会给出实测数字（形状如下，数值以真机为准）：
-
-```text
---- Phase 2 summary ---
-device           cuda
-load_seconds     ...
-duration         ...
-processing_time  ...
-speed            ...
-segments         ...
-first_text       こんばんは。
-0 check(s) failed
-```
-
-脚本断言与 §48 验收项的对应关系：
-
-| 验收项 | 覆盖方式 |
-| --- | --- |
-| 模型加载成功 | `POST /api/models/load` 计时并断言 200 + `loaded_model` |
-| NVIDIA GPU 可使用 | `--expect-device cuda` 对上 `/api/status` 的 `device` |
-| CPU fallback 可用 | 配置固定 `device = "cpu"` 后 `--expect-device cpu` |
-| 返回真实 segments | 段数 > 0、时间轴严格递增且不越界、`text` 与分段拼接一致 |
-| Web UI 不需要修改 | 断言 `/` 与 `/docs` 可达；字幕内容仍需浏览器里看一眼 |
-| API Schema 不需要修改 | 断言响应字段集合与 Mock 模式完全相同 |
-| SRT 输出不需要修改 | 断言 `output/<stem>.transcribe.srt` 块数 == 段数且为标准时间戳 |
-| 只改 config 就能切换 | 同一份代码、只换配置文件跑通上面全部 |
-
-模型未下载时脚本会在 `installed` 断言处 ABORT 并提示先跑 `download_models.py`，退出码非 0；
-没有真模型和真素材就不可能得到 PASS，这条脚本不会虚假通过。并发 409、422、400 也在断言之列，
-但如果素材太短（推理不到 1 秒）会明确报 INCONCLUSIVE 而不是假装通过。
-
-## 安全限制
-
-服务固定监听 `127.0.0.1`。这是一个接受本地文件路径的 API，
-**不得直接暴露到局域网 / 公网**（Local path API must not be exposed directly to LAN/WAN）。
-
-`GET /api/output/<name>` 是唯一能读服务器文件的接口：只读、只接受
-`output/` 目录下 `*.json` / `*.srt` 的裸文件名，含 `/`、`\`、`..` 或别的扩展名一律 422，
-解析后仍会校验目标确实落在 `output/` 内。
+测试会验证 `/health`、v1 Contract、统一错误结构、OpenAPI 路径和应用的启动 / 关闭生命周期。
 
 ## 目录结构
 
 ```text
-app/api/        路由（health / models / inference / output / setup）
-app/core/       配置、应用状态、统一错误类型
-app/engines/    Engine 接口 + MockEngine + FasterWhisperEngine
-app/services/   InferenceService：Profile 解析、模型切换、并发锁、写输出
-app/schemas/    请求 / 响应模型
-app/utils/      SRT 生成、JSON / SRT 落盘
-static/         原生前端：demo（index/app.js）+ 验收页（diagnostics）
-models/ output/ samples/ scripts/
+local-trans-api-demo/
+├── app/
+│   ├── main.py
+│   ├── config.py
+│   ├── api/
+│   │   ├── health.py
+│   │   └── v1.py
+│   ├── core/
+│   │   └── errors.py
+│   ├── schemas/
+│   │   └── v1.py
+│   ├── services/
+│   │   ├── task_store.py
+│   │   └── transcription_service.py
+│   └── providers/
+│       ├── transcription.py
+│       ├── translation.py
+│       └── mock/
+│           ├── transcription.py
+│           └── translation.py
+├── tests/
+│   ├── test_health.py
+│   └── test_v1_contract.py
+├── .env.example
+├── pyproject.toml
+├── requirements.txt
+└── requirements-dev.txt
 ```
 
-## 已知限制
+## 后续范围
 
-- 真实推理只验证过 CPU 分支（`cpu` + `int8`）与替身模型 `Systran/faster-whisper-tiny`
-  （留在 `models/faster-whisper-tiny/`，已 gitignore、可随时删除）：本机没有 NVIDIA 设备，
-  `cuda` + `float16` 与两个目标模型（`whisper-ja-1.5b` 3.1 GB、`chickenrice-v2`）都没有
-  执行过，所以日语转录与中文翻译质量目前没有任何结论。
-- Phase 2 状态：设备开关与 `scripts/phase2_check.py` 已就绪，并已对着真实引擎 + 真实音频
-  跑通全部断言（含三条反向用例，证明断言会真的失败）；§48 按上面 runbook 在真机打勾。
-- 本机访问不了 huggingface.co，只能走 `hf-mirror.com`：`snapshot_download` 对部分文件会失败，
-  需要镜像端点或逐个 `resolve/main` 补齐。`download_models.py` 本身的失败原因输出、
-  半成品重下与完成即复用三条路径均已实测。
-- 后端 `realtime_factor` 由 `processing_time / duration` 计算（四舍五入到 4 位），
-  翻译样例因此为 `0.0152`，与设计文档示例中的 `0.0151` 有末位差异。
-- 状态展示每 2 秒轮询一次，未使用 WebSocket。
-- CI 只走过 `setup.bat` 的 `py -3.12` 引导分支；`py` 启动器缺失时的 `python` / `python3`
-  回退分支未被覆盖（`python3` 在真实 Windows 上可能被 Microsoft Store 别名占位）。
-- 「Copy Text」优先用 Clipboard API，失焦等情况下退回 `execCommand("copy")`；
-  这条路径还需要一次真实前台窗口点击确认。
+以下内容有意留给后续 Issue：
+
+- SAK-33：完整转录到翻译 Demo
+- SAK-34：真实 AI Provider 与模型接入

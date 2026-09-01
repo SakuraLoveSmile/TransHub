@@ -1,9 +1,4 @@
-"""Environment probe and background model download for the acceptance page.
-
-Nothing here runs shell commands: the only side effect is a
-``huggingface_hub`` download of a model id that already exists in
-``MODEL_CATALOG``.
-"""
+"""Local setup and diagnostics service kept outside the stable API contract."""
 
 from __future__ import annotations
 
@@ -25,7 +20,6 @@ from app.core.config import (
 from app.core.errors import DownloadBusyError, UnknownModelError
 
 logger = logging.getLogger("app.setup")
-
 DEFAULT_ENDPOINT = "https://huggingface.co"
 
 
@@ -43,16 +37,11 @@ def _cuda_device_count() -> int:
         import ctranslate2
 
         return int(ctranslate2.get_cuda_device_count())
-    except Exception:  # a broken CUDA stack must not break the probe
+    except (AttributeError, ImportError, OSError, RuntimeError, TypeError):
         return 0
 
 
 def _fetched_bytes(root: Path) -> int:
-    """Bytes actually pulled: finished files plus in-flight partials.
-
-    huggingface_hub hardlinks completed files into ``.cache``, so counting that
-    tree as well would report roughly double the real size.
-    """
     if not root.is_dir():
         return 0
     total = 0
@@ -128,7 +117,6 @@ class SetupService:
                     "bytes_on_disk": _fetched_bytes(directory),
                 }
             )
-
         probe_root = (
             self.config.models_directory
             if self.config.models_directory.exists()
@@ -158,7 +146,6 @@ class SetupService:
             raise DownloadBusyError(
                 f"Already downloading {self.job.model_id}; wait for it to finish."
             )
-
         job = DownloadJob(
             model_id,
             self.model_directory(model_id),
@@ -166,13 +153,10 @@ class SetupService:
         )
         self.job = job
         self._task = asyncio.create_task(self._run(job))
-        logger.info("Downloading %s from %s", model_id, job.endpoint)
         return job.snapshot()
 
     def progress(self) -> dict:
-        if self.job is None:
-            return {"state": "idle"}
-        return self.job.snapshot()
+        return {"state": "idle"} if self.job is None else self.job.snapshot()
 
     async def _run(self, job: DownloadJob) -> None:
         try:
@@ -199,8 +183,11 @@ class SetupService:
         try:
             info = api.model_info(repository, files_metadata=True)
             job.total_bytes = sum(file.size or 0 for file in info.siblings)
-        except Exception:  # a missing denominator must not block the download
+        except Exception:  # noqa: BLE001 - optional metadata must not block download
             logger.warning("Could not read file sizes for %s", repository)
-
         job.directory.mkdir(parents=True, exist_ok=True)
-        snapshot_download(repo_id=repository, local_dir=str(job.directory), endpoint=job.endpoint)
+        snapshot_download(
+            repo_id=repository,
+            local_dir=str(job.directory),
+            endpoint=job.endpoint,
+        )

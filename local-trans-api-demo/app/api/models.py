@@ -19,18 +19,12 @@ async def list_models(request: Request) -> ModelsResponse:
 
 @router.post("/load", response_model=LoadModelResponse)
 async def load_model(body: ModelLoadRequest, request: Request) -> LoadModelResponse:
-    service = request.app.state.service
-    await service.load_model(body.model)
+    await request.app.state.service.load_model(body.model)
     engine = request.app.state.engine
-    return LoadModelResponse(
-        success=True, loaded_model=engine.loaded_model, mock=engine.mock
-    )
+    return LoadModelResponse(success=True, loaded_model=engine.loaded_model, mock=engine.mock)
 
 
 @router.post("/unload", response_model=UnloadModelResponse)
 async def unload_model(request: Request) -> UnloadModelResponse:
-    service = request.app.state.service
-    await service.unload_model()
-    return UnloadModelResponse(
-        success=True, loaded_model=request.app.state.engine.loaded_model
-    )
+    await request.app.state.service.unload_model()
+    return UnloadModelResponse(success=True, loaded_model=request.app.state.engine.loaded_model)

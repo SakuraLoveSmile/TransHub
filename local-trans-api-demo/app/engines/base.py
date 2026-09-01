@@ -7,13 +7,9 @@ from app.schemas.api import InferenceResult, ModelInfo, Segment
 
 
 def compute_metrics(duration: float, processing_time: float) -> tuple[float, float]:
-    """Return (realtime_factor, speed), shared by Mock and real engines."""
     if duration <= 0 or processing_time <= 0:
         return 0.0, 0.0
-    return (
-        round(processing_time / duration, 4),
-        round(duration / processing_time, 2),
-    )
+    return round(processing_time / duration, 4), round(duration / processing_time, 2)
 
 
 def build_result(
@@ -24,8 +20,7 @@ def build_result(
     text: str,
     segments: list[Segment],
 ) -> InferenceResult:
-    """One schema for every engine: transcription carries ``language``,
-    translation carries ``source_language`` / ``target_language``."""
+    """Build the one public result shape shared by both engines."""
     realtime_factor, speed = compute_metrics(duration, processing_time)
     common = {
         "success": True,
@@ -49,8 +44,6 @@ def build_result(
 
 
 class BaseInferenceEngine(ABC):
-    """API, UI, schema and outputs depend on this contract only."""
-
     name: str = "base"
     mock: bool = False
     device: str = "unknown"
@@ -58,22 +51,22 @@ class BaseInferenceEngine(ABC):
     def __init__(self, config: AppConfig):
         self.config = config
         self.loaded_model: str | None = None
-        self.busy: bool = False
+        self.busy = False
 
     @abstractmethod
     async def load_model(self, model_id: str) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def unload_model(self) -> None:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     async def transcribe(self, path: str, profile: str) -> InferenceResult:
-        pass
+        raise NotImplementedError
 
     def is_installed(self, model_id: str) -> bool:
-        """Mock mode has no model files, so everything counts as installed."""
+        del model_id
         return True
 
     def list_models(self) -> list[ModelInfo]:

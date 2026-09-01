@@ -9,15 +9,12 @@ from fastapi.responses import FileResponse
 from app.core.errors import InvalidPathError, OutputNotFoundError
 
 router = APIRouter(prefix="/api/output", tags=["output"])
-
-# Only the demo's own subtitle / result artifacts, addressed by bare filename.
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.(json|srt)$")
-
 MEDIA_TYPES = {".json": "application/json", ".srt": "text/plain; charset=utf-8"}
 
 
 def resolve_artifact(output_directory: Path, name: str) -> Path:
-    if not NAME_RE.match(name):
+    if not NAME_RE.fullmatch(name):
         raise InvalidPathError(f"Invalid output name: {name}")
     directory = output_directory.resolve()
     path = (directory / name).resolve()

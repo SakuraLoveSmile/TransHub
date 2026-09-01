@@ -9,7 +9,6 @@ router = APIRouter(prefix="/api/setup", tags=["setup"])
 
 @router.get("/env")
 async def environment(request: Request) -> dict:
-    """What the machine is actually ready for: deps, GPU, models, disk."""
     return request.app.state.setup.env()
 
 

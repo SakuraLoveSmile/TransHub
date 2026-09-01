@@ -1,6 +1,7 @@
+from fastapi.testclient import TestClient
+
 from app import __version__
 from app.main import app
-from fastapi.testclient import TestClient
 
 
 def test_health_contract_returns_expected_payload() -> None:

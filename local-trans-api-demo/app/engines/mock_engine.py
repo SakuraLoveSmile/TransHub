@@ -7,12 +7,9 @@ from app.core.errors import UnknownModelError, UnknownProfileError
 from app.engines.base import BaseInferenceEngine, build_result
 from app.schemas.api import InferenceResult, Segment
 
-# Fixed delay keeps the demo deterministic while still exercising Loading,
-# Processing and Busy states in the UI.
 LOAD_DELAY = 0.3
 UNLOAD_DELAY = 0.1
 INFER_DELAY = 1.5
-
 DURATION = 125.4
 
 TRANSCRIBE_RESULT = {
@@ -23,7 +20,6 @@ TRANSCRIBE_RESULT = {
         {"start": 3.8, "end": 7.2, "text": "今日はよろしくお願いします。"},
     ],
 }
-
 TRANSLATE_RESULT = {
     "processing_time": 1.9,
     "text": "晚上好。今天请多关照。",
@@ -35,8 +31,6 @@ TRANSLATE_RESULT = {
 
 
 class MockEngine(BaseInferenceEngine):
-    """Plumbing-only engine: same schema and timings as the real one."""
-
     name = "mock"
     mock = True
     device = "mock"
@@ -52,14 +46,12 @@ class MockEngine(BaseInferenceEngine):
         self.loaded_model = None
 
     async def transcribe(self, path: str, profile: str) -> InferenceResult:
+        del path
         resolved = self.config.profiles.get(profile)
         if resolved is None:
             raise UnknownProfileError(f"Unknown profile: {profile}")
-
         await asyncio.sleep(INFER_DELAY)
-        data = (
-            TRANSLATE_RESULT if resolved.task == "translate" else TRANSCRIBE_RESULT
-        )
+        data = TRANSLATE_RESULT if resolved.task == "translate" else TRANSCRIBE_RESULT
         return build_result(
             resolved,
             mock=True,
