@@ -6,6 +6,7 @@ import logging
 import time
 from pathlib import Path
 
+from app.core import runtime_preflight
 from app.core.config import MODEL_CATALOG, AppConfig, Profile, model_dir_is_complete
 from app.core.errors import (
     InferenceError,
@@ -45,7 +46,7 @@ def select_device(device: str = "auto", compute_type: str = "default") -> tuple[
             import ctranslate2
 
             has_cuda = ctranslate2.get_cuda_device_count() > 0
-        except Exception as error:  # noqa: BLE001 - surface broken CUDA runtimes clearly
+        except Exception as error:
             raise RuntimeError("CUDA runtime is unavailable") from error
         if not has_cuda:
             raise RuntimeError("NVIDIA CUDA GPU is required")
@@ -88,6 +89,10 @@ class FasterWhisperEngine(BaseInferenceEngine):
             from faster_whisper import WhisperModel
         except ImportError as error:
             raise ModelLoadError("faster-whisper is not installed") from error
+        if self.device == "cuda":
+            report = runtime_preflight.probe_runtime()
+            if not report.ok:
+                raise ModelLoadError(report.message)
         try:
             self.model = await asyncio.to_thread(
                 WhisperModel,

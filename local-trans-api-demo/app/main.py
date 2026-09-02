@@ -22,6 +22,7 @@ from app.api.setup import router as setup_router
 from app.api.status import router as status_router
 from app.api.v1 import router as v1_router
 from app.config import Settings
+from app.core import runtime_preflight
 from app.core.config import BASE_DIR, AppConfig, load_config
 from app.core.errors import AppError, V1APIError
 from app.core.state import AppState
@@ -53,6 +54,12 @@ def create_app(
     compatibility_config = replace(
         load_config(), host=app_settings.host, port=app_settings.port
     )
+    try:
+        gpu_dll_directories = runtime_preflight.register_dll_directories()
+    except Exception:
+        LOGGER.exception("Could not register GPU DLL directories; continuing startup")
+        gpu_dll_directories = []
+    LOGGER.info("GPU DLL directories registered: %d", len(gpu_dll_directories))
     compatibility_engine = create_engine(
         compatibility_config.engine, compatibility_config
     )
@@ -108,6 +115,7 @@ def create_app(
     application.state.transcription_service = transcription_service
     application.state.config = compatibility_config
     application.state.engine = compatibility_engine
+    application.state.gpu_dll_directories = gpu_dll_directories
     application.state.service = compatibility_service
     application.state.setup = SetupService(compatibility_config)
 

@@ -10,6 +10,7 @@ import shutil
 import time
 from pathlib import Path
 
+from app.core import runtime_preflight
 from app.core.config import (
     CONFIG_PATH,
     MODEL_CATALOG,
@@ -133,6 +134,7 @@ class SetupService:
                 for name in ("faster_whisper", "ctranslate2", "huggingface_hub")
             },
             "cuda_devices": _cuda_device_count(),
+            "runtime_preflight": runtime_preflight.probe_runtime().as_dict(),
             "hf_endpoint": os.environ.get("HF_ENDPOINT") or DEFAULT_ENDPOINT,
             "disk_free_bytes": shutil.disk_usage(probe_root).free,
             "models": models,

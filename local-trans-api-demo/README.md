@@ -106,6 +106,7 @@ python -m app.main
 ## Phase 2：真实日语转录
 
 真实 `faster-whisper`、`whisper-ja-1.5b` 与 NVIDIA CUDA 的完整验收步骤见 [`docs/phase2-windows-nvidia.md`](docs/phase2-windows-nvidia.md)。
+启动后可在 `/api/setup/env` 或 [`docs/gpu-runtime-preflight.md`](docs/gpu-runtime-preflight.md) 查看 Runtime Preflight；CUDA/cuDNN DLL 目录会自动发现并注册，无需手工修改 `PATH`。
 
 Phase 2 已完成 Windows + NVIDIA CUDA 真机验收。真实 19 分钟级日语音频已经完成模型加载、转录、segments、JSON/SRT 与 API Contract 验证。
 
@@ -174,14 +175,13 @@ python -m pytest
 .venv\Scripts\python scripts\phase3_check.py --file "C:\ASMR\sample.wav"
 ```
 
-## 下一阶段
+## 下一阶段（#6 起）
 
 核心推理 MVP 已经成立。下一阶段优先从“能在开发环境运行”推进到“能稳定被其他本机软件长期调用”：
 
-1. **Windows Runtime / GPU Preflight**：自动发现并验证 CUDA、cuBLAS、cuDNN DLL 与可用 NVIDIA GPU，提供明确错误信息。
-2. **Windows 启动与分发**：减少手工 Python 环境配置，整理一键启动、依赖安装和正式运行目录。
-3. **服务运行稳定性**：完善启动/关闭、模型切换、并发忙状态、异常恢复与日志诊断。
-4. **真实客户端接入**：用至少一个实际调用方完成端到端集成，验证 Stable API v1 足够支撑业务。
-5. **版本与发布基线**：定义第一个可供其他软件依赖的版本和发布验收标准。
+1. **Windows 启动与分发**：减少手工 Python 环境配置，整理一键启动、依赖安装和正式运行目录。
+2. **服务运行稳定性**：完善启动/关闭、模型切换、并发忙状态、异常恢复与日志诊断。
+3. **真实客户端接入**：用至少一个实际调用方完成端到端集成，验证 Stable API v1 足够支撑业务。
+4. **版本与发布基线**：定义第一个可供其他软件依赖的版本和发布验收标准。
 
 不在近期范围内：公网服务、多用户鉴权、CPU fallback、复杂任务队列、翻译质量自动评分。

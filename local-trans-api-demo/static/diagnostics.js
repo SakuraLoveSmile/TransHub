@@ -745,6 +745,9 @@ function renderEnv() {
   els.env.textContent = "";
   const deps = env.ai_dependencies;
   const depsOk = deps.faster_whisper && deps.ctranslate2 && deps.huggingface_hub;
+  const runtime = env.runtime_preflight || {};
+  const runtimeOk = runtime.code === "RUNTIME_OK" && runtime.ok;
+  const runtimeDlls = Array.isArray(runtime.dlls) ? runtime.dlls : [];
   els.env.append(
     envRow("config", env.config_path),
     envRow("engine / device", `${env.engine} · ${env.device} · ${env.compute_type}`),
@@ -754,9 +757,23 @@ function renderEnv() {
       depsOk ? "state-ok" : "state-error"
     ),
     envRow("CUDA devices", String(env.cuda_devices), env.cuda_devices ? "state-ok" : "state-idle"),
+    envRow(
+      "GPU runtime",
+      `${runtime.code || "UNKNOWN"} · ${runtime.message || "No preflight result"}`,
+      runtimeOk ? "state-ok" : "state-error"
+    ),
     envRow("HF endpoint", env.hf_endpoint),
     envRow("models dir", env.models_directory)
   );
+  const dllSummary = document.createElement("p");
+  dllSummary.className = `hint ${runtimeOk ? "" : "state-error"}`;
+  dllSummary.textContent = `Required DLLs: ${runtimeDlls
+    .map(
+      (dll) =>
+        `${dll.name}: ${dll.found ? "found" : "missing"}/${dll.loaded ? "loaded" : "not loaded"}`
+    )
+    .join(" · ") || "no probe data"}`;
+  els.env.append(dllSummary);
   if (!depsOk) {
     const hint = document.createElement("p");
     hint.className = "hint";

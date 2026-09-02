@@ -203,7 +203,11 @@ first_text
 - ctranslate2 CUDA 支持
 - `/api/status` 中 device 值
 
-Windows 下还可以先确认关键 DLL 是否可发现：
+启动后优先查看 `/api/setup/env` 的 `runtime_preflight`。Runtime Preflight 会自动发现并注册
+CUDA/cuDNN DLL 目录，不要求手工修改 `PATH`，并会把 GPU、目录缺失、DLL 缺失和 DLL 加载失败
+分类为不同的诊断码。完整说明见 [`gpu-runtime-preflight.md`](gpu-runtime-preflight.md)。
+
+如果需要绕过应用诊断直接确认 Windows loader 是否能找到关键 DLL，仍可以使用以下兜底命令：
 
 ```powershell
 where.exe cublas64_12.dll
