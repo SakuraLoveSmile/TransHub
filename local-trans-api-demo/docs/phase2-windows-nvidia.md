@@ -7,9 +7,10 @@
 - Windows 环境启动
 - 模型加载
 - NVIDIA CUDA 推理
-- CPU fallback 推理
 - 真实音频转录
 - API Schema 与 Mock 保持一致
+
+TransferHub 的真实推理链路为 NVIDIA GPU / CUDA-only，不提供 CPU 推理降级。
 
 本阶段不测试翻译质量。ChickenRice 日语 → 中文质量属于后续 Phase 3。
 
@@ -22,6 +23,8 @@
 - Windows 10/11
 - NVIDIA GPU
 - 已安装 NVIDIA 驱动
+- CUDA 12.x 运行环境可用
+- cuDNN 9 可用
 - Python 环境可运行
 - 有足够磁盘空间
 
@@ -152,30 +155,6 @@ run.bat
 
 ---
 
-## CPU fallback 验收
-
-修改：
-
-```toml
-[faster_whisper]
-device = "cpu"
-compute_type = "int8"
-```
-
-重启服务后执行：
-
-```powershell
-.venv\Scripts\python scripts\phase2_check.py `
-  --file "D:\ASMR\test.flac" `
-  --expect-device cpu
-```
-
-目标：
-
-证明没有 CUDA 时仍可以运行。
-
----
-
 ## 验收输出
 
 成功后记录：
@@ -219,14 +198,20 @@ first_text
 检查：
 
 - NVIDIA 驱动
+- CUDA 12.x
+- cuDNN 9
 - ctranslate2 CUDA 支持
 - `/api/status` 中 device 值
 
-### CPU 推理过慢
+Windows 下还可以先确认关键 DLL 是否可发现：
 
-这是正常情况。
+```powershell
+where.exe cublas64_12.dll
+where.exe cublasLt64_12.dll
+where.exe cudnn64_9.dll
+```
 
-`phase2_check.py` 默认等待 900 秒，因为真实模型 CPU 推理可能需要数分钟。
+如果 CUDA Runtime 不完整，应修复 GPU 环境后重新启动服务；TransferHub 不会自动降级到 CPU。
 
 ---
 
@@ -235,10 +220,10 @@ first_text
 Phase 2 完成需要：
 
 - [ ] CUDA 验收通过
-- [ ] CPU fallback 验收通过
 - [ ] API Schema 未变化
 - [ ] Mock 与 FasterWhisper 输出结构一致
 - [ ] 输出 JSON/SRT 正常
+- [ ] 最终 `0 check(s) failed`
 
 完成后再进入 Phase 3：
 

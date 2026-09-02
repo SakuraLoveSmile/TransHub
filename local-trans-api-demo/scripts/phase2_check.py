@@ -1,14 +1,13 @@
-"""Phase 2 acceptance checks (spec section 48) against a running real-engine server.
+"""Phase 2 CUDA acceptance checks against a running real-engine server.
 
 Unlike ``smoke_check.py`` this drives ``engine = "faster-whisper"`` and needs one
 real audio file:
 
-    .venv\\Scripts\\python scripts\\phase2_check.py --file "D:\\ASMR\\test.flac"
+    .venv\\Scripts\\python scripts\\phase2_check.py --file "D:\\ASMR\\test.flac" --expect-device cuda
 
-Add ``--expect-device cuda`` to assert the GPU run, and force
-``device = "cpu"`` in ``config.toml`` to assert the CPU-fallback run.
-Real inference on CPU can take minutes, so each request waits ``--timeout``
-seconds (default 900) before it is reported as FAIL.
+TransferHub real inference is NVIDIA GPU / CUDA-only. The checker always expects
+CUDA and never treats CPU inference as an accepted fallback. Each request waits
+``--timeout`` seconds (default 900) before it is reported as FAIL.
 Nothing here can pass without a genuine model and genuine media.
 """
 
@@ -62,14 +61,11 @@ def run(checks: Checker, args) -> dict:
     )
     device = payload.get("device")
     summary["device"] = device
-    if args.expect_device:
-        checks.check(
-            f"device is {args.expect_device}",
-            device == args.expect_device,
-            f"got {device!r}; force [faster_whisper] device in config.toml to change it",
-        )
-    else:
-        checks.check("device reported", device in {"cpu", "cuda"}, str(device))
+    checks.check(
+        f"device is {args.expect_device}",
+        device == args.expect_device,
+        f"got {device!r}; set [faster_whisper] device = \"cuda\" and restart run.bat",
+    )
 
     status, payload = checks.json_call("GET", "/api/models")
     models = {model["id"]: model for model in payload.get("models", [])}
@@ -253,12 +249,12 @@ def main() -> int:
     parser.add_argument("--base-url", default="http://127.0.0.1:8765")
     parser.add_argument("--model", default="whisper-ja-1.5b")
     parser.add_argument("--language", default="ja", help="expected payload language")
-    parser.add_argument("--expect-device", choices=("cpu", "cuda"), default=None)
+    parser.add_argument("--expect-device", choices=("cuda",), default="cuda")
     parser.add_argument(
         "--timeout",
         type=float,
         default=900.0,
-        help="seconds to wait per request; real inference on CPU can take minutes",
+        help="seconds to wait per request for long real-media acceptance runs",
     )
     parser.add_argument(
         "--output-dir",

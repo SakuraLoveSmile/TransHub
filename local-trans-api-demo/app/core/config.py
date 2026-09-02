@@ -24,7 +24,7 @@ MODEL_CATALOG: dict[str, dict[str, str]] = {
 }
 
 REQUIRED_MODEL_FILES = ("model.bin", "config.json", "tokenizer.json")
-DEVICES = ("auto", "cpu", "cuda")
+DEVICES = ("auto", "cuda")
 
 # Single source of truth for media types accepted by uploads and inference.
 SUPPORTED_SUFFIXES = frozenset(

@@ -223,20 +223,12 @@ const CHECKS = {
   },
 
   device: {
-    label: "device matches expectation",
+    label: "device is cuda",
     run: async (ctx) => {
       const device = ctx.status.device;
-      if (ctx.expectDevice) {
-        return device === ctx.expectDevice
-          ? pass(device)
-          : fail(
-              `got ${device}, expected ${ctx.expectDevice}. Set [faster_whisper] ` +
-                `device = "${ctx.expectDevice}" in the config and restart run.bat.`
-            );
-      }
-      return device === "cpu" || device === "cuda"
+      return device === "cuda"
         ? pass(device)
-        : fail(`unexpected device ${device}`);
+        : fail(`got ${device}, expected cuda. Set [faster_whisper] device = "cuda" and restart run.bat.`);
     },
   },
 
