@@ -1,89 +1,81 @@
-# Phase 3 ChickenRice 日语→中文人工质量验收
+# Phase 3 ChickenRice 日语→中文链路验收
 
-Phase 3 固定当前已经可用的 ChickenRice v2 CUDA 翻译链路，不调整推理参数、模型或 API。自动 checker 只检查请求是否真实走 CUDA、响应结构、时间轴、性能指标以及 JSON/SRT 产物；翻译是否“实际可用”必须由人工观看字幕并结合音频判断。
+Phase 3 用于固定当前已经可用的 ChickenRice v2 CUDA 翻译链路，不调整模型、推理参数或 Stable API Contract。
 
-## 验收前提
+## 状态
 
-在 Windows + NVIDIA CUDA 环境启动真实引擎服务，并确认没有使用 Mock Engine。每个样本使用独立文件名，避免后一次结果覆盖前一次的 `.zh.json` 和 `.zh.srt`。
+**Phase 3 已完成。**
+
+已完成的真实验收基线：
+
+- Windows + NVIDIA CUDA 真机运行。
+- `chickenrice-v2` 可加载。
+- `POST /api/translate-audio` 已完成真实日语→中文翻译。
+- 返回 `success=true`、`mock=false`、`profile=ja-zh`。
+- `source_language=ja`、`target_language=zh-CN`。
+- JSON / SRT 输出可正常读取。
+- UTF-8 中文输出正常。
+- 已记录真实 19 分钟级音频的性能基线。
+- `scripts/phase3_check.py` 已落库，用于后续机器和版本的重复验证。
+
+## 工程验收范围
+
+Phase 3 checker 只检查工程链路：
+
+- 服务可达且健康。
+- 使用真实 `faster-whisper` engine，而非 Mock。
+- device 为 `cuda`。
+- `chickenrice-v2` 已安装并可以加载。
+- `/api/translate-audio` 返回 Stable API v1 结构。
+- 日语→简体中文语言字段正确。
+- 翻译文本和 segments 非空。
+- segments 时间范围和顺序合法。
+- 文本与 segments 拼接结果一致。
+- performance metrics 与稳定公式一致。
+- JSON / SRT 产物存在并可按 UTF-8 读取。
+- SRT block 数量与 segments 一致。
+
+运行方式：
 
 ```powershell
 cd C:\User\File\Code\TransHub\local-trans-api-demo
-.venv\Scripts\python scripts\phase3_check.py --file "C:\ASMR\sample-a-dialogue.wav"
-.venv\Scripts\python scripts\phase3_check.py --file "C:\ASMR\sample-b-whisper.wav"
-.venv\Scripts\python scripts\phase3_check.py --file "C:\ASMR\sample-c-binaural.wav"
+.venv\Scripts\python scripts\phase3_check.py --file "C:\ASMR\sample.wav"
 ```
 
-每次运行都应得到 `0 check(s) failed`，并在服务输出目录生成与输入文件同名的：
+预期结果：
 
 ```text
-<sample>.zh.json
-<sample>.zh.srt
+0 check(s) failed
 ```
 
-如果模型未安装，先执行 checker 输出的安装命令：
+如果模型尚未安装：
 
 ```powershell
 .venv\Scripts\python scripts\download_models.py --model chickenrice-v2
 ```
 
-## 三类真实样本
+## 翻译质量不属于 Done 门槛
 
-| 样本 | 内容要求 | 实际文件 | Checker 结果 | 人工结论 |
-| --- | --- | --- | --- | --- |
-| A | 普通对话，敬语较多 | `sample-a-dialogue.*` | 待填写 | 待填写 |
-| B | 低声、耳语、气声 | `sample-b-whisper.*` | 待填写 | 待填写 |
-| C | 音效较多、停顿较长、双耳 ASMR | `sample-c-binaural.*` | 待填写 | 待填写 |
+TransHub 的职责是提供稳定的本机转录 / 翻译服务和统一 API，而不是建立模型质量评测体系。
 
-实际验收时将“实际文件”替换为真实样本的完整路径，并记录运行日期、输入时长、输出文件名和 checker 终端结果。不要用 Mock 输出或预先存在的旧输出代替本次真实请求。
+因此以下内容不再作为 Phase 3 完成条件：
 
-## 人工检查表
+- 三类 ASMR 样本人工打分。
+- BLEU / COMET 等翻译指标。
+- LLM 自动评分。
+- 对自然度、敬语、文学表达的强制评价。
+- 固定中文比例阈值。
 
-对每个样本打开对应的 SRT，结合原始音频逐段检查：
-
-- [ ] 中文整体能够理解
-- [ ] 没有大面积漏译
-- [ ] 没有连续重复或明显幻觉
-- [ ] 敬语和语气大致合理
-- [ ] 时间轴没有明显漂移
-- [ ] SRT 可以直接观看
-
-允许少量语句不自然、个别错词、ASMR 拟声词翻译不完美以及标点不理想。Phase 3 的目标是实际可用，不是文学级翻译，也不设置 BLEU、COMET、中文比例或 LLM 自动评分阈值。
-
-## 结果记录
-
-### Sample A
-
-- 文件：
-- Checker：`0 check(s) failed` / 失败项：
-- JSON：
-- SRT：
-- 人工备注：
-- 结论：可用 / 不可用
-
-### Sample B
-
-- 文件：
-- Checker：`0 check(s) failed` / 失败项：
-- JSON：
-- SRT：
-- 人工备注：
-- 结论：可用 / 不可用
-
-### Sample C
-
-- 文件：
-- Checker：`0 check(s) failed` / 失败项：
-- JSON：
-- SRT：
-- 人工备注：
-- 结论：可用 / 不可用
+实际翻译质量由 `chickenrice-v2` 模型能力、输入音频和具体业务场景决定。后续如发现明确的工程问题，例如空输出、严重时间轴错误、重复段落、乱码或 Contract 破坏，应作为独立 Bug 处理，而不是重新打开 Phase 3 质量验收。
 
 ## Done 标准
 
-Phase 3 只有在以下条件同时满足时才标记 Done：
+Phase 3 的 Done 标准为：
 
-1. 三个样本均为真实日语 ASMR 音频，其中至少覆盖上述三类内容。
-2. 每个样本的 `phase3_check.py` 均为 `0 check(s) failed`。
-3. 三个样本的 JSON 和 SRT 都能读取，SRT 能直接观看。
-4. 三个样本的人工检查表全部完成，且没有灾难性漏译、重复、幻觉或时间轴漂移。
-5. 人工结论达到“可用”。
+1. ChickenRice v2 在 Windows + NVIDIA CUDA 真机可加载。
+2. 真实日语音频可通过 `/api/translate-audio` 完成翻译。
+3. Stable API v1 字段、语言信息、segments 和性能指标正常。
+4. JSON / SRT 产物正常生成并可读取。
+5. `phase3_check.py` 已进入仓库，后续可以重复执行工程验收。
+
+以上条件已经满足，Phase 3 关闭。
