@@ -1,23 +1,43 @@
-# TransferHub
+# TransHub
 
-TransferHub 是 Windows 本地运行的转录 / 翻译 API 中枢，为本机其他服务提供统一入口。
+TransHub 是 Windows 本地运行的转录 / 语音翻译 API 中枢，为本机其他软件提供统一的 AI 音频处理入口。
 
-## 当前阶段：API Contract v1 + M0 Mock Task Lifecycle
+## 当前阶段：Phase 3 完成，进入产品化阶段
 
-当前版本只验证本地 HTTP 服务的基础结构：
+当前核心 MVP 已完成真实模型链路验证：
 
-- FastAPI + Uvicorn 服务可以启动和退出。
-- `GET /health` 提供基础健康检查。
-- 转录和翻译都有独立的 Provider 边界。
-- 默认使用 Mock Provider，不加载真实 AI 模型。
-- `/api/*` 提供稳定的客户端 API Contract v1；默认使用 Mock Engine。
-- `/v1` 的 SAK-31/32 任务生命周期接口继续保留，不在本阶段迁移。
+- FastAPI + Uvicorn 本地服务可启动和退出。
+- Stable API Contract v1 已冻结。
+- Mock Engine 保留用于开发、测试和 CI。
+- `FasterWhisperEngine` 已接入真实模型。
+- `whisper-ja-1.5b` 已完成 Windows + NVIDIA CUDA 真机转录验收。
+- `ChickenRice v2` 已完成 Windows + NVIDIA CUDA 日语→中文真实翻译链路验收。
+- JSON / SRT 输出、segments 时间轴和性能指标已进入自动 checker。
+- Windows smoke CI 持续验证基础回归。
 
-SAK-31 定义 HTTP、请求、响应和错误模型；SAK-32 增加内存任务生命周期，但不引入数据库、消息队列或真实 AI Provider。
+TransHub 的正式真实推理环境为 **Windows + NVIDIA GPU + CUDA-only**，不提供 CPU inference fallback。
+
+翻译质量的主观评价不作为 TransHub 的工程验收门槛。Phase 3 只保证真实翻译链路、API Contract、输出文件与基础结果结构可用；具体模型翻译质量由模型本身和实际业务场景决定。
+
+## 架构
+
+```text
+Client / Web UI
+      ↓
+FastAPI
+      ↓
+InferenceService
+      ↓
+Engine Interface
+      ├─ MockEngine
+      └─ FasterWhisperEngine
+             ├─ whisper-ja-1.5b
+             └─ chickenrice-v2
+```
+
+服务默认只监听 `127.0.0.1`，并接受本机文件路径。不要直接暴露到 LAN/WAN。
 
 ## Windows PowerShell 启动
-
-在 PowerShell 中执行：
 
 ```powershell
 cd .\local-trans-api-demo
@@ -33,11 +53,9 @@ cd .\local-trans-api-demo
 python -m app.main
 ```
 
-运行命令前请确保当前目录是 `local-trans-api-demo`，并已安装 `requirements.txt` 中的依赖。
-
 ## 配置
 
-配置通过环境变量提供，默认值如下：
+配置通过环境变量和项目配置提供。基础环境变量默认值：
 
 ```text
 TRANSFERHUB_HOST=127.0.0.1
@@ -56,7 +74,7 @@ $env:TRANSFERHUB_LOG_LEVEL = "INFO"
 python -m app.main
 ```
 
-默认只监听本机回环地址，不暴露到局域网。可复制 `.env.example` 作为配置参考；当前 Demo 不自动读取 `.env` 文件。
+真实推理使用 NVIDIA CUDA。缺少可用 GPU / CUDA Runtime 时应明确失败，不会自动降级到 CPU。
 
 ## API Contract
 
@@ -71,29 +89,50 @@ python -m app.main
 | GET | `/api/models` | 模型列表 |
 | POST | `/api/models/load` | 加载模型 |
 | POST | `/api/models/unload` | 卸载模型 |
-| POST | `/api/transcribe` | 音频转录 |
-| POST | `/api/translate-audio` | 音频翻译 |
+| POST | `/api/transcribe` | 日语音频转录 |
+| POST | `/api/translate-audio` | 日语→中文音频翻译 |
 | GET | `/api/output/{name}` | 读取 JSON/SRT 产物 |
 
 ### Legacy API
 
-`GET /api/health` 继续保留，返回 `{"status":"ok"}`，仅用于旧客户端兼容。新客户端必须使用 `GET /health`。
+`GET /api/health` 继续保留，仅用于旧客户端兼容。新客户端必须使用 `GET /health`。
+
+`/v1` 的 SAK-31/32 内存任务生命周期接口继续保留，暂不迁移。
 
 ### Local Setup / Diagnostics API
 
 `GET /api/setup/env`、`POST /api/setup/download`、`GET /api/setup/download` 和 `/diagnostics.html` 仅供本机设置与诊断，不属于 Stable API v1，不承诺长期兼容。
 
-`/api/*` 项目错误返回 `{ "code": "...", "detail": "..." }`；FastAPI/Pydantic 自动生成的校验错误保持原有格式。
-
-## Phase 2 Windows + NVIDIA 真机验收
+## Phase 2：真实日语转录
 
 真实 `faster-whisper`、`whisper-ja-1.5b` 与 NVIDIA CUDA 的完整验收步骤见 [`docs/phase2-windows-nvidia.md`](docs/phase2-windows-nvidia.md)。
 
-TransferHub 的真实推理链路为 NVIDIA GPU / CUDA-only，不提供 CPU 推理降级。该阶段只做真实转录链路和设备验收，不包含 ChickenRice 翻译质量评估。
+Phase 2 已完成 Windows + NVIDIA CUDA 真机验收。真实 19 分钟级日语音频已经完成模型加载、转录、segments、JSON/SRT 与 API Contract 验证。
+
+## Phase 3：ChickenRice 日语→中文翻译
+
+Phase 3 已完成真实 ChickenRice v2 CUDA 翻译链路验证。
+
+自动验收脚本：
+
+```powershell
+.venv\Scripts\python scripts\phase3_check.py --file "C:\ASMR\sample.wav"
+```
+
+checker 验证：
+
+- 服务使用真实 `faster-whisper` engine，而非 Mock。
+- device 为 `cuda`。
+- `chickenrice-v2` 已安装并可加载。
+- `/api/translate-audio` 返回 Stable API v1 结构。
+- `source_language=ja`、`target_language=zh-CN`。
+- 文本与 segments 非空，时间轴合法。
+- 性能指标公式一致。
+- UTF-8 JSON / SRT 产物可读取。
+
+详细说明见 [`docs/phase3-translation-quality.md`](docs/phase3-translation-quality.md)。该文档名称为历史遗留；当前 Phase 3 不再要求人工翻译质量评分。
 
 ## Health Check
-
-服务启动后执行：
 
 ```powershell
 curl http://127.0.0.1:8765/health
@@ -113,66 +152,36 @@ curl http://127.0.0.1:8765/health
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| POST | `/v1/transcriptions` | 校验请求、创建异步任务并返回初始 `queued` 状态，状态码 `202` |
-| GET | `/v1/tasks/{task_id}` | 查询内存中的任务状态和结果；不存在时返回 `404` |
-| POST | `/v1/translations` | 返回可预测的任务翻译 Contract，状态码 `200` |
+| POST | `/v1/transcriptions` | 创建异步转录任务，返回 `202` |
+| GET | `/v1/tasks/{task_id}` | 查询内存任务状态和结果 |
+| POST | `/v1/translations` | 返回任务翻译 Contract |
 
-这些接口保持现状；本阶段不做 `/v1/` URL 前缀迁移。新的稳定客户端音频翻译接口是 `/api/translate-audio`。
-
-`/v1` 校验错误统一返回 `error.code`、`error.message` 和 `error.details`，不会返回 FastAPI 默认的 `detail` 数组。
-
-### Mock 转录任务
-
-转录任务会异步经历 `queued → running → completed`，Provider 异常时经历 `queued → running → failed`。Mock 不读取或解码输入文件，只校验 `input.type` 为 `file` 且 `input.path` 非空。
-
-`TRANSFERHUB_MOCK_TRANSCRIPTION_DELAY` 控制模拟延迟，单位为秒，默认 `0.2`；`TRANSFERHUB_MOCK_TRANSCRIPTION_FAIL=true` 可用于验证失败状态。任务只保存在内存中，服务重启后会丢失。
+这些接口保持兼容。新的稳定客户端应优先使用 `/api/*`。
 
 ## 测试
-
-安装测试依赖并运行：
 
 ```powershell
 python -m pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-测试会验证 `/health`、v1 Contract、统一错误结构、OpenAPI 路径和应用的启动 / 关闭生命周期。
+基础测试覆盖健康检查、API Contract、统一错误结构、GPU-only 设备策略、OpenAPI 路径和应用生命周期。GitHub Actions 使用 Windows smoke test 做持续回归。
 
-## 目录结构
+真实模型 checker：
 
-```text
-local-trans-api-demo/
-├── app/
-│   ├── main.py
-│   ├── config.py
-│   ├── api/
-│   │   ├── health.py
-│   │   └── v1.py
-│   ├── core/
-│   │   └── errors.py
-│   ├── schemas/
-│   │   └── v1.py
-│   ├── services/
-│   │   ├── task_store.py
-│   │   └── transcription_service.py
-│   └── providers/
-│       ├── transcription.py
-│       ├── translation.py
-│       └── mock/
-│           ├── transcription.py
-│           └── translation.py
-├── tests/
-│   ├── test_health.py
-│   └── test_v1_contract.py
-├── .env.example
-├── pyproject.toml
-├── requirements.txt
-└── requirements-dev.txt
+```powershell
+.venv\Scripts\python scripts\phase2_check.py --file "C:\ASMR\sample.wav"
+.venv\Scripts\python scripts\phase3_check.py --file "C:\ASMR\sample.wav"
 ```
 
-## 后续范围
+## 下一阶段
 
-以下内容有意留给后续 Issue：
+核心推理 MVP 已经成立。下一阶段优先从“能在开发环境运行”推进到“能稳定被其他本机软件长期调用”：
 
-- SAK-33：完整转录到翻译 Demo
-- SAK-34：真实 AI Provider 与模型接入
+1. **Windows Runtime / GPU Preflight**：自动发现并验证 CUDA、cuBLAS、cuDNN DLL 与可用 NVIDIA GPU，提供明确错误信息。
+2. **Windows 启动与分发**：减少手工 Python 环境配置，整理一键启动、依赖安装和正式运行目录。
+3. **服务运行稳定性**：完善启动/关闭、模型切换、并发忙状态、异常恢复与日志诊断。
+4. **真实客户端接入**：用至少一个实际调用方完成端到端集成，验证 Stable API v1 足够支撑业务。
+5. **版本与发布基线**：定义第一个可供其他软件依赖的版本和发布验收标准。
+
+不在近期范围内：公网服务、多用户鉴权、CPU fallback、复杂任务队列、翻译质量自动评分。
