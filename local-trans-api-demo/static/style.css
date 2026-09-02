@@ -92,6 +92,45 @@ input[type="text"]:focus {
   border-color: var(--accent);
 }
 
+input[type="file"] {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  color: var(--text);
+  font: 13px/1.4 inherit;
+  background: #0c0e12;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+input[type="file"]::file-selector-button {
+  padding: 6px 12px;
+  margin-right: 10px;
+  color: var(--text);
+  font: inherit;
+  background: #222834;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.advanced {
+  margin-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+
+.advanced summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 10px 0 2px;
+  user-select: none;
+}
+
+.advanced summary:hover {
+  color: var(--text);
+}
+
 .modes {
   display: grid;
   gap: 6px;

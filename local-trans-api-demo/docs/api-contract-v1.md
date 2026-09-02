@@ -104,15 +104,31 @@ Deprecated / legacy compatibility only. New clients MUST use `GET /health`.
 
 ## Local Setup / Diagnostics API
 
-以下接口用于本机环境体检和模型下载，不属于 Stable API v1：
+以下接口用于本机环境体检、模型下载和网页上传，不属于 Stable API v1：
 
 ```text
 GET  /api/setup/env
 POST /api/setup/download
 GET  /api/setup/download
+POST /api/upload
 ```
 
 它们是 Local setup / diagnostics API，不承诺长期兼容。`/diagnostics.html` 是人工验收页面，不是客户端 API。
+
+### Upload
+
+`POST /api/upload` 是网页「选文件」的支撑端点（浏览器与服务同机时浏览器拿不到绝对路径，只能先上传再转录）：multipart 字段 `file`，成功返回：
+
+```json
+{
+  "path": "C:\\local-trans-api-demo\\uploads\\<uuid>-<原名>.flac",
+  "name": "<uuid>-<原名>.flac"
+}
+```
+
+- 仅接受 `SUPPORTED_SUFFIXES`（`.wav/.flac/.mp3/.m4a/.aac/.ogg/.opus/.mp4/.mkv/.webm`），其余后缀返回 `400 UNSUPPORTED_FILE`。
+- 保存名由 `{uuid4().hex}-{净化后的原 stem}{后缀}` 组成；净化会剔除 `[A-Za-z0-9._-]` 之外的所有字符，保存路径经 `resolve()` 校验必须仍位于 `[upload] directory`（默认 `./uploads`）内。
+- 返回的 `path` 是服务端绝对路径，可直接作为 `POST /api/transcribe`、`POST /api/translate-audio` 的 `path` 字段。
 
 ## Existing `/v1/*` task API
 

@@ -11,6 +11,9 @@ directory = "./output"
 [models]
 directory = "./models"
 
+[upload]
+directory = "./uploads"
+
 [profiles.ja_transcribe]
 id = "ja-transcribe"
 model_id = "whisper-ja-1.5b"

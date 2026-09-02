@@ -2,7 +2,17 @@
 
 TransferHub 是 Windows 本地运行的转录 / 翻译 API 中枢，为本机其他服务提供统一入口。
 
-## 当前阶段：API Contract v1 + M0 Mock Task Lifecycle
+## 当前阶段：真实转录 MVP（Windows + NVIDIA CUDA）
+
+当前版本完成了「打开网页 → 选一个本地音频文件 → 得到真实日语转录字幕」的闭环：
+
+- 主页面直接选择本地音频/视频文件（`.wav/.flac/.mp3/.m4a/.aac/.ogg/.opus/.mp4/.mkv/.webm`），浏览器上传到本机服务（`POST /api/upload`）后再转录。
+- 真实引擎为 `faster-whisper` + `whisper-ja-1.5b`（CUDA/CPU fallback），通过 `config.real.toml` 启用（模板见 `config.real.example.toml`）。
+- 转录结果可在线预览、复制文本、下载 SRT 字幕；JSON/SRT 产物同时落在 `./output`。
+- 默认 `config.toml` 仍走 Mock 引擎，用于开发与基础测试，不加载真实模型。
+- 日→中翻译（ChickenRice）与 Phase 3 质量评估明确留作后续。
+
+Mock 链路只验证流程、字段与错误码；真实转录验收在 Windows + NVIDIA 机器上进行（见「启用真实引擎」）。
 
 当前版本只验证本地 HTTP 服务的基础结构：
 
@@ -11,6 +21,7 @@ TransferHub 是 Windows 本地运行的转录 / 翻译 API 中枢，为本机其
 - 转录和翻译都有独立的 Provider 边界。
 - 默认使用 Mock Provider，不加载真实 AI 模型。
 - `/api/*` 提供稳定的客户端 API Contract v1；默认使用 Mock Engine。
+- 页面「选文件」通过 `POST /api/upload` 把文件保存到本机 `uploads/`，再走 `/api/transcribe`。
 - `/v1` 的 SAK-31/32 任务生命周期接口继续保留，不在本阶段迁移。
 
 SAK-31 定义 HTTP、请求、响应和错误模型；SAK-32 增加内存任务生命周期，但不引入数据库、消息队列或真实 AI Provider。
@@ -34,6 +45,22 @@ python -m app.main
 ```
 
 运行命令前请确保当前目录是 `local-trans-api-demo`，并已安装 `requirements.txt` 中的依赖。
+
+## 网页选文件（浏览器上传）
+
+浏览器与本机服务同机，浏览器拿不到绝对路径，所以「选本地文件」走两步：
+
+1. 打开 `http://127.0.0.1:8765/`，在页面主输入框选择一个本地音频/视频文件（也可在「高级：直接填服务器路径」里直接填服务端路径作 fallback）。
+2. 点 **Run**：文件先 `POST /api/upload` 保存到 `uploads/`（文件名 `{uuid}-{原名}`），拿到服务端路径后再 `POST /api/transcribe`；转录完成后可复制文本或下载 SRT。
+
+命令行等价流程（Mock 同样适用，仅验证流程/字段/错误码）：
+
+```powershell
+curl -F "file=@D:\ASMR\test.flac" http://127.0.0.1:8765/api/upload
+curl -X POST http://127.0.0.1:8765/api/transcribe -H "Content-Type: application/json" -d "{\"path\":\"<上一步返回的 path>\"}"
+```
+
+上传接口只接受 `.wav/.flac/.mp3/.m4a/.aac/.ogg/.opus/.mp4/.mkv/.webm`，其余后缀返回 `400 UNSUPPORTED_FILE`；保存名会剔除 `[A-Za-z0-9._-]` 以外的字符，无法跳出 `uploads/` 目录。
 
 ## 配置
 
@@ -81,15 +108,32 @@ python -m app.main
 
 ### Local Setup / Diagnostics API
 
-`GET /api/setup/env`、`POST /api/setup/download`、`GET /api/setup/download` 和 `/diagnostics.html` 仅供本机设置与诊断，不属于 Stable API v1，不承诺长期兼容。
+`GET /api/setup/env`、`POST /api/setup/download`、`GET /api/setup/download`、`POST /api/upload` 和 `/diagnostics.html` 仅供本机设置与诊断，不属于 Stable API v1，不承诺长期兼容。`/api/upload` 是网页「选文件」的支撑端点。
 
 `/api/*` 项目错误返回 `{ "code": "...", "detail": "..." }`；FastAPI/Pydantic 自动生成的校验错误保持原有格式。
 
-## Phase 2 Windows + NVIDIA 真机验收
+## 启用真实引擎（Windows + NVIDIA CUDA）
 
-真实 `faster-whisper`、`whisper-ja-1.5b`、CUDA 与 CPU fallback 的完整验收步骤见 [`docs/phase2-windows-nvidia.md`](docs/phase2-windows-nvidia.md)。
+真实 `faster-whisper` 与 CUDA 路径只在 Windows + NVIDIA 机器上运行（开发/CI 继续用 Mock）。
 
-该阶段只做真实转录链路和设备验收，不包含 ChickenRice 翻译质量评估。
+```powershell
+copy config.real.example.toml config.real.toml
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install -r requirements-ai.txt
+python scripts\download_models.py --model whisper-ja-1.5b
+set TRANS_HUB_CONFIG=%CD%\config.real.toml
+run.bat
+```
+
+`config.real.toml` 与 `config.toml` 的差异只有引擎开关：`engine = "faster-whisper"`、`[faster_whisper] device = "cuda"`、`compute_type = "float16"`；`config.real.toml` 保持本地不入库（已在 `.gitignore`），仓库只提交 `config.real.example.toml` 模板。
+
+启动后 `GET /api/status` 应为 `engine=faster-whisper`、`mock=false`、`device=cuda`。完整验收步骤见 [`docs/phase2-windows-nvidia.md`](docs/phase2-windows-nvidia.md)，自动验收入口：
+
+```text
+python scripts\phase2_check.py --file "D:\ASMR\test.flac" --model whisper-ja-1.5b --language ja --expect-device cuda
+```
+
+该阶段只做真实转录链路和设备验收（日→中翻译的 ChickenRice / Phase 3 留作后续）。
 
 ## Health Check
 

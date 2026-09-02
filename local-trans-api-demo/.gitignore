@@ -15,6 +15,10 @@ models/*
 samples/*
 !samples/.gitkeep
 
+# Browser-uploaded media (local-only scratch; keep the directory tracked)
+uploads/*
+!uploads/.gitkeep
+
 # OS / editor
 .DS_Store
 Thumbs.db

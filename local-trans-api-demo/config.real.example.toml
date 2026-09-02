@@ -1,0 +1,43 @@
+# Real-engine template for the Windows + NVIDIA CUDA machine.
+#
+# Usage: copy this file to config.real.toml (kept local, git-ignored) and start
+# the server with TRANS_HUB_CONFIG set:
+#
+#   copy config.real.example.toml config.real.toml
+#   set TRANS_HUB_CONFIG=%CD%\config.real.toml
+#   run.bat
+#
+# config.toml stays mock; config.real.toml is the only real-engine switch.
+
+[server]
+host = "127.0.0.1"
+port = 8765
+
+[inference]
+engine = "faster-whisper"
+
+[faster_whisper]
+device = "cuda"
+compute_type = "float16"
+
+[output]
+directory = "./output"
+
+[models]
+directory = "./models"
+
+[upload]
+directory = "./uploads"
+
+[profiles.ja_transcribe]
+id = "ja-transcribe"
+model_id = "whisper-ja-1.5b"
+task = "transcribe"
+language = "ja"
+
+[profiles.ja_zh]
+id = "ja-zh"
+model_id = "chickenrice-v2"
+task = "translate"
+language = "ja"
+target_language = "zh-CN"

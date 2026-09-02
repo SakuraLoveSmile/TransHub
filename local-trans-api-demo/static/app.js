@@ -1,5 +1,6 @@
 const API = {
   status: "/api/status",
+  upload: "/api/upload",
   transcribe: "/api/transcribe",
   translate: "/api/translate-audio",
 };
@@ -14,6 +15,7 @@ const els = {
   status: document.getElementById("status"),
   loadedModel: document.getElementById("loaded-model"),
   path: document.getElementById("media-path"),
+  file: document.getElementById("media-file"),
   run: document.getElementById("run"),
   resultModel: document.getElementById("result-model"),
   resultDuration: document.getElementById("result-duration"),
@@ -29,6 +31,7 @@ let jobRunning = false;
 let lastOutcome = null;
 let currentResult = null;
 let currentMode = "transcribe";
+let currentSourceName = "untitled";
 
 function pad(value, width) {
   return String(value).padStart(width, "0");
@@ -172,7 +175,14 @@ function buildSrt(result) {
 
 async function run() {
   const mode = selectedMode();
-  const path = els.path.value;
+  const file = els.file.files && els.file.files[0];
+  const path = els.path.value.trim();
+
+  if (!file && !path) {
+    showError("Choose a local file, or fill in the server path in Advanced.");
+    outcome("Error", "error");
+    return;
+  }
 
   clearError();
   clearResult();
@@ -180,17 +190,27 @@ async function run() {
   els.run.disabled = true;
   els.run.textContent = "Processing...";
   currentMode = mode;
+  currentSourceName = file ? file.name : path;
 
   jobRunning = true;
   pollStatus();
 
   try {
+    let mediaPath;
+    if (file) {
+      const uploaded = await uploadFile(file);
+      if (uploaded === null) return;
+      mediaPath = uploaded;
+    } else {
+      mediaPath = path;
+    }
+
     const response = await fetch(
       mode === "translate" ? API.translate : API.transcribe,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ path: mediaPath }),
       }
     );
     const payload = await response.json();
@@ -214,6 +234,31 @@ async function run() {
     els.run.disabled = false;
     els.run.textContent = "Run";
   }
+}
+
+async function uploadFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  let payload;
+  try {
+    const response = await fetch(API.upload, {
+      method: "POST",
+      body: formData,
+    });
+    payload = await response.json();
+    if (response.ok) return payload.path;
+    if (response.status === 409) {
+      showError("Engine is busy, try again.");
+      outcome("Busy", "running");
+    } else {
+      showError(detailText(payload, response.status));
+      outcome("Error", "error");
+    }
+  } catch (error) {
+    showError(`Cannot reach the API: ${error.message}`);
+    outcome("Error", "error");
+  }
+  return null;
 }
 
 function copyFallback(text) {
@@ -259,7 +304,7 @@ function downloadSrt() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${mediaStem(els.path.value)}.${TAG_BY_MODE[currentMode]}.srt`;
+  link.download = `${mediaStem(currentSourceName)}.${TAG_BY_MODE[currentMode]}.srt`;
   link.click();
   URL.revokeObjectURL(url);
 }

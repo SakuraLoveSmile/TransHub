@@ -20,6 +20,7 @@ from app.api.models import router as models_router
 from app.api.output import router as output_router
 from app.api.setup import router as setup_router
 from app.api.status import router as status_router
+from app.api.upload import router as upload_router
 from app.api.v1 import router as v1_router
 from app.config import Settings
 from app.core.config import BASE_DIR, AppConfig, load_config
@@ -45,13 +46,14 @@ def create_app(
     settings: Settings | None = None,
     transcription_provider: TranscriptionProvider | None = None,
     translation_provider: TranslationProvider | None = None,
+    config: AppConfig | None = None,
 ) -> FastAPI:
     """Create the HTTP application and its default provider instances."""
     app_settings = settings or Settings.from_environment()
     configure_logging(app_settings)
 
     compatibility_config = replace(
-        load_config(), host=app_settings.host, port=app_settings.port
+        config or load_config(), host=app_settings.host, port=app_settings.port
     )
     compatibility_engine = create_engine(
         compatibility_config.engine, compatibility_config
@@ -122,6 +124,7 @@ def create_app(
     application.include_router(inference_router)
     application.include_router(output_router)
     application.include_router(setup_router)
+    application.include_router(upload_router)
     application.include_router(v1_router)
     application.mount(
         "/",

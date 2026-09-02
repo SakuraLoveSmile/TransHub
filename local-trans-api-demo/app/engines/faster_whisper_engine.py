@@ -6,7 +6,13 @@ import logging
 import time
 from pathlib import Path
 
-from app.core.config import MODEL_CATALOG, AppConfig, Profile, model_dir_is_complete
+from app.core.config import (
+    MODEL_CATALOG,
+    SUPPORTED_SUFFIXES,
+    AppConfig,
+    Profile,
+    model_dir_is_complete,
+)
 from app.core.errors import (
     InferenceError,
     InvalidPathError,
@@ -20,18 +26,6 @@ from app.engines.base import BaseInferenceEngine, build_result
 from app.schemas.api import InferenceResult, Segment
 
 logger = logging.getLogger("app.engine.faster-whisper")
-SUPPORTED_SUFFIXES = {
-    ".wav",
-    ".flac",
-    ".mp3",
-    ".m4a",
-    ".aac",
-    ".ogg",
-    ".opus",
-    ".mp4",
-    ".mkv",
-    ".webm",
-}
 TRANSCRIBE_OPTIONS = {
     "beam_size": 1,
     "condition_on_previous_text": False,

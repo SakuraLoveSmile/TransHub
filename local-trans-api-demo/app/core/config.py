@@ -26,6 +26,22 @@ MODEL_CATALOG: dict[str, dict[str, str]] = {
 REQUIRED_MODEL_FILES = ("model.bin", "config.json", "tokenizer.json")
 DEVICES = ("auto", "cpu", "cuda")
 
+# Single source of truth for media types accepted by uploads and inference.
+SUPPORTED_SUFFIXES = frozenset(
+    {
+        ".wav",
+        ".flac",
+        ".mp3",
+        ".m4a",
+        ".aac",
+        ".ogg",
+        ".opus",
+        ".mp4",
+        ".mkv",
+        ".webm",
+    }
+)
+
 
 @dataclass(frozen=True)
 class Profile:
@@ -49,6 +65,7 @@ class AppConfig:
     engine: str
     output_directory: Path
     models_directory: Path
+    upload_directory: Path
     profiles: dict[str, Profile]
     faster_whisper: FasterWhisperSettings = FasterWhisperSettings()
 
@@ -96,6 +113,9 @@ def load_config(path: Path = CONFIG_PATH) -> AppConfig:
         ),
         models_directory=_resolve_directory(
             raw.get("models", {}).get("directory", "./models")
+        ),
+        upload_directory=_resolve_directory(
+            raw.get("upload", {}).get("directory", "./uploads")
         ),
         profiles=profiles,
         faster_whisper=FasterWhisperSettings(

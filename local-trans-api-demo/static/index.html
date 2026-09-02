@@ -30,26 +30,36 @@
       </section>
 
       <section class="card">
-        <label class="field" for="media-path">Media Path</label>
+        <label class="field" for="media-file">Audio / Video File</label>
         <input
-          id="media-path"
-          type="text"
-          value="D:\ASMR\test.flac"
-          spellcheck="false"
-          autocomplete="off"
+          id="media-file"
+          type="file"
+          accept=".wav,.flac,.mp3,.m4a,.aac,.ogg,.opus,.mp4,.mkv,.webm,audio/*,video/*"
         />
 
-        <span class="field">Mode</span>
-        <div class="modes">
-          <label class="radio">
-            <input type="radio" name="mode" value="transcribe" checked />
-            <span>Japanese Transcription</span>
-          </label>
-          <label class="radio">
-            <input type="radio" name="mode" value="translate" />
-            <span>Japanese &rarr; Chinese</span>
-          </label>
-        </div>
+        <details class="advanced">
+          <summary>高级:直接填服务器路径</summary>
+          <label class="field" for="media-path">Media Path (server-side)</label>
+          <input
+            id="media-path"
+            type="text"
+            value="D:\ASMR\test.flac"
+            spellcheck="false"
+            autocomplete="off"
+          />
+
+          <span class="field">Mode</span>
+          <div class="modes">
+            <label class="radio">
+              <input type="radio" name="mode" value="transcribe" checked />
+              <span>Japanese Transcription</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="mode" value="translate" />
+              <span>Japanese &rarr; Chinese</span>
+            </label>
+          </div>
+        </details>
 
         <div class="actions">
           <button id="run" type="button">Run</button>

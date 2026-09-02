@@ -91,3 +91,8 @@ class StatusResponse(BaseModel):
     mock: bool
     loaded_model: str | None = None
     device: str | None = None
+
+
+class UploadResponse(BaseModel):
+    path: str
+    name: str
