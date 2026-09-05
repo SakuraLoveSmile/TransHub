@@ -35,6 +35,19 @@ jobs:
           if errorlevel 1 exit /b 1
           .venv\Scripts\python -m pytest
 
+      - name: Set up Node 24 for the Vue frontend
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: local-trans-api-demo/frontend/package-lock.json
+
+      - name: Test and build the Vue frontend
+        shell: cmd
+        run: |
+          call build-web.bat
+          if errorlevel 1 exit /b 1
+
       - name: Start server and check health
         shell: pwsh
         run: |
