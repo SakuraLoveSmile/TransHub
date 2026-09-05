@@ -2,6 +2,18 @@
 
 TransHub 是 Windows 本地运行的转录 / 语音翻译 API 中枢，为本机其他软件提供统一的 AI 音频处理入口。
 
+## 分支完成记录：feat/dark-workbench-zcode
+
+本分支「TransHub 深色工具台」前端改版由 AI 编码代理独立完成：
+
+- **完成模型**：glm-5.3 flash max（ZCode 会话，模型标识 `builtin:zai-start-plan/GLM-5.3-Flash`）
+- **完成日期**：2026-09-05
+- **总用时**：约 2 小时 06 分（19:31 – 21:37，含实现、测试与浏览器验收）
+- **交付内容**：深色主题 `styles.css` + 重构 `App.vue` + 5 个业务组件（ServiceStatus / MediaFilePicker / SubtitleTaskCard / SubtitleTasks / ModelPanel）+ 5 个组件测试文件
+- **自动化验证**：组件测试 47/47 通过；`vue-tsc` 无错误；`vite build` 成功（JS 84.7 kB / CSS 6.0 kB，gzip 后 32.8 kB / 1.7 kB）；`git diff --check` 干净
+- **浏览器验收**：Mock 环境 8 个测试点全部通过（提交流程、复制/展开、模型下载进度与加载卸载、断线恢复、键盘焦点），1440 / 1024 / 768 / 390 四档宽度截图见 `screenshots/`（18 张）
+- **Token 用量 / 生成速度**：会话未暴露该统计，未能记录
+
 ## 当前阶段：Phase 3 完成，进入产品化阶段
 
 当前核心 MVP 已完成真实模型链路验证，主页「打开 → 选一个本地音频文件 → 出字幕 → 下载 SRT」闭环可用：
