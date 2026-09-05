@@ -80,3 +80,43 @@ class ModelLoadError(AppError):
 class InferenceError(AppError):
     status_code = 500
     code = "INFERENCE_FAILED"
+
+
+class EmptyFileError(AppError):
+    status_code = 400
+    code = "EMPTY_FILE"
+
+
+class FileTooLargeError(AppError):
+    status_code = 413
+    code = "FILE_TOO_LARGE"
+
+
+class InvalidRequestError(AppError):
+    status_code = 422
+    code = "INVALID_REQUEST"
+
+
+class QueueFullError(AppError):
+    status_code = 409
+    code = "QUEUE_FULL"
+
+
+class TaskNotFoundError(AppError):
+    status_code = 404
+    code = "TASK_NOT_FOUND"
+
+
+class ResultNotReadyError(AppError):
+    status_code = 409
+    code = "RESULT_NOT_READY"
+
+
+class ResultMissingError(AppError):
+    status_code = 410
+    code = "RESULT_MISSING"
+
+
+class OutputWriteError(AppError):
+    status_code = 500
+    code = "OUTPUT_WRITE_FAILED"

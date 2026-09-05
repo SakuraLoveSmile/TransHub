@@ -91,6 +91,8 @@ segments
 | `OutputNotFoundError` | 404 | `OUTPUT_NOT_FOUND` |
 | `ModelLoadError` | 503 | `MODEL_LOAD_FAILED` |
 | `InferenceError` | 500 | `INFERENCE_FAILED` |
+| *(未捕获异常)* | 500 | `INTERNAL_ERROR` |
+
 
 ## Legacy API
 
