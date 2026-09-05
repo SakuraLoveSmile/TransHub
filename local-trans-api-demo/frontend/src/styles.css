@@ -1,0 +1,244 @@
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --bg: #0b0e14;
+  --surface: #141923;
+  --surface-hover: #1b2230;
+  --border: #303a4c;
+  --text: #edf2fa;
+  --muted: #a5b0c2;
+  --accent: #a5b4fc;
+  --success: #6ee7b7;
+  --warning: #fcd34d;
+  --danger: #fda4af;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.panel {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.button-primary {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #141827;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 959px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 599px) {
+  .app {
+    padding: 20px 16px 32px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+}
+
+/* 以下为深色工具台在核心变量之上的通用控件样式。 */
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 26px;
+  letter-spacing: 0.5px;
+}
+
+.app-tagline {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.panel-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.panel-head .panel-title {
+  margin: 0;
+}
+
+.button {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.button-small {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.button-block {
+  width: 100%;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.error-text {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.success-text {
+  margin: 0;
+  color: var(--success);
+  font-size: 14px;
+}
+
+.warning-text {
+  margin: 0;
+  color: var(--warning);
+  font-size: 14px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.badge-success {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.badge-warning {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.badge-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.badge-info {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.field-label {
+  display: block;
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.text-wrap {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 599px) {
+  .actions {
+    gap: 8px;
+  }
+
+  .actions .button,
+  .actions .button-primary {
+    flex: 1 1 auto;
+  }
+}

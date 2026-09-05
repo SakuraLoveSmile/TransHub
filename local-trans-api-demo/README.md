@@ -223,3 +223,18 @@ python -m pytest
 5. **版本与发布基线**：定义第一个可供其他软件依赖的版本和发布验收标准。
 
 不在近期范围内：公网服务、多用户鉴权、CPU fallback、复杂任务队列、翻译质量自动评分。
+
+## 分支记录：深色工具台前端（2026-09-05）
+
+| 项 | 值 |
+| --- | --- |
+| 分支 / worktree | `feat/dark-workbench-qoder` / `TransHub-dark-workbench-qoder`（从 main `6351fb1` 创建，未 commit、未 push） |
+| 执行标注 | `qwen 3.8 flash xhigh`（按使用者指定的署名标签记录；Qoder 不公开底层模型信息，此字段不代表已核实的模型身份） |
+| 完成时间 | 2026-09-05 19:30–20:04（本地时区），会话计时 2081 秒 ≈ 34 分 41 秒 |
+| Token / 速度 | 未记录：会话内未暴露 token 用量，无法给出可信的 tokens/秒；需查 Qoder 用量面板 |
+| 改动范围 | 仅 `frontend/`（Vue 3 + TS）＋ 新增截图目录 `artifacts/dark-workbench/`；后端协议、数据库、推理流程与 `static/` 旧页面未改，未新增生产依赖 |
+| 产出文件 | 新增 `src/styles.css`、`components/MediaFilePicker.vue`、`components/SubtitleTaskCard.vue`；重写 `App.vue`、`components/SubtitleTasks.vue`、`components/ServiceStatus.vue`、`components/ModelPanel.vue` |
+| 自动化门禁 | `npm run test` 62 passed（7 个文件）；`npm run typecheck` 无错误；`npm run build` 产出 `index-B4eMiPRQ.js` 85.13 kB（gzip 33.16）＋ `index-CgPd7jeO.css` 5.43 kB；`git diff --check` 干净 |
+| 变异检查 | 2 组：受理任务保留（首次即失败，有效）；轮询并发守卫（首次**未被捕获**，已补一条"提交刷新与在途轮询合并"用例后复现失败），验证后源文件按哈希原样还原 |
+| 浏览器验收 | 1440 / 1024 / 768 / 390 四档宽度均无横向溢出；键盘完成"选文件→切模式→提交→复制→下载 SRT"；构建产物经真实服务加载；CDP Offline 验证离线态与恢复 |
+| 未验证 | 真实 Windows + NVIDIA CUDA 推理（本机无该环境，未以 Mock 代替）；断线与恢复类用例打到的是另一 worktree 已在 8765 运行的服务，因为 HEAD 的 `app/main.py` 尚未挂载 `frontend/dist` |
