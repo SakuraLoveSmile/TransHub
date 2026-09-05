@@ -24,3 +24,7 @@ uploads/*
 Thumbs.db
 .idea/
 .vscode/
+
+# Frontend build output and dependencies (no trailing slash: node_modules may be a symlink)
+frontend/dist
+frontend/node_modules

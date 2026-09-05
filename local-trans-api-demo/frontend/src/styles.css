@@ -1,0 +1,224 @@
+/* TransHub 前端统一深色样式：设计变量、基础控件与响应式规则。 */
+
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --bg: #0b0e14;
+  --surface: #141923;
+  --surface-hover: #1b2230;
+  --border: #303a4c;
+  --text: #edf2fa;
+  --muted: #a5b0c2;
+  --accent: #a5b4fc;
+  --success: #6ee7b7;
+  --warning: #fcd34d;
+  --danger: #fda4af;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+a,
+input {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px 48px;
+}
+
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 0.5px;
+}
+
+.app-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  margin-top: 24px;
+}
+
+.workspace-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 0;
+}
+
+.panel {
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.panel > h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  letter-spacing: 0.3px;
+}
+
+.button-primary {
+  min-height: 44px;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #141827;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.button-secondary {
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-hover);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.button-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-hover);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* 状态同时用文字区分，不只依赖红绿颜色。 */
+.chip-success {
+  border-color: rgba(110, 231, 183, 0.5);
+  color: var(--success);
+}
+
+.chip-warning {
+  border-color: rgba(252, 211, 77, 0.5);
+  color: var(--warning);
+}
+
+.chip-danger {
+  border-color: rgba(253, 164, 175, 0.5);
+  color: var(--danger);
+}
+
+.chip-accent {
+  border-color: rgba(165, 180, 252, 0.5);
+  color: var(--accent);
+}
+
+.text-alert {
+  color: var(--danger);
+}
+
+.text-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.message {
+  margin: 8px 0 0;
+}
+
+.message-alert {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.message-status {
+  color: var(--success);
+  font-size: 13px;
+}
+
+.break-anywhere {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 959px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 单栏顺序：创建字幕 → 任务记录 → 模型管理。 */
+  .workspace-side {
+    display: contents;
+  }
+
+  .panel-create {
+    order: 1;
+  }
+
+  .panel-tasks {
+    order: 2;
+  }
+
+  .panel-models {
+    order: 3;
+  }
+}
+
+@media (max-width: 599px) {
+  .app {
+    padding: 20px 16px 32px;
+  }
+
+  .panel {
+    padding: 18px;
+  }
+}
