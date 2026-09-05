@@ -19,6 +19,11 @@ samples/*
 uploads/*
 !uploads/.gitkeep
 
+# Unified subtitle-task runtime data (SQLite + per-task files; local only)
+data/
+frontend/dist/
+frontend/node_modules
+
 # OS / editor
 .DS_Store
 Thumbs.db

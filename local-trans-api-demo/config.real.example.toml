@@ -29,6 +29,12 @@ directory = "./models"
 [upload]
 directory = "./uploads"
 
+[subtitle_tasks]
+data_directory = "./data"
+max_upload_bytes = 2147483648
+max_waiting = 3
+retention_days = 7
+
 [profiles.ja_transcribe]
 id = "ja-transcribe"
 model_id = "whisper-ja-1.5b"

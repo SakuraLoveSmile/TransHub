@@ -55,6 +55,10 @@ const els = {
   checks: document.getElementById("checks"),
   count: document.getElementById("count"),
   summary: document.getElementById("summary"),
+  preflightState: document.getElementById("preflight-state"),
+  preflight: document.getElementById("preflight"),
+  refreshPreflight: document.getElementById("refresh-preflight"),
+  preflightHint: document.getElementById("preflight-hint"),
 };
 
 let abortController = null;
@@ -895,6 +899,83 @@ async function resumeProgress() {
   }
 }
 
+async function loadPreflight() {
+  const response = await request("GET", "/api/setup/preflight", undefined, 15000);
+  if (response.status !== 200) {
+    els.preflightState.textContent = `unreachable (${response.status || response.text})`;
+    return;
+  }
+  const preflight = response.body || {};
+  els.preflightState.textContent = preflight.ok ? "PASS" : "FAIL";
+  els.preflightState.className = `count ${preflight.ok ? "state-ok" : "state-error"}`;
+  renderPreflight(preflight);
+}
+
+function renderPreflight(data) {
+  els.preflight.textContent = "";
+  const gpu = data.gpu || {};
+  const cuda = data.cuda || {};
+  const dlls = data.dlls || {};
+
+  let gpuLabel = "unavailable";
+  let gpuTone = "state-error";
+  if (gpu.available) {
+    gpuTone = "state-ok";
+    const dev0 = (gpu.devices && gpu.devices[0]) ? gpu.devices[0].name : "NVIDIA GPU";
+    gpuLabel = `${dev0} (${gpu.count} device${gpu.count > 1 ? "s" : ""})`;
+  } else if (gpu.error) {
+    gpuLabel = `unavailable (${gpu.error})`;
+  }
+  els.preflight.append(envRow("NVIDIA GPU", gpuLabel, gpuTone));
+
+  if (gpu.available) {
+    els.preflight.append(
+      envRow("Driver / CUDA Max", `${gpu.driver_version || "-"} (CUDA driver: ${gpu.cuda_driver_version || "-"})`)
+    );
+    if (gpu.devices && gpu.devices.length) {
+      const mem = gpu.devices[0];
+      els.preflight.append(
+        envRow("VRAM", `${formatBytes(mem.free_memory_bytes)} free / ${formatBytes(mem.total_memory_bytes)} total`)
+      );
+    }
+  }
+
+  els.preflight.append(
+    envRow(
+      "CUDA Runtime",
+      cuda.available ? `available (${cuda.device_count} device${cuda.device_count > 1 ? "s" : ""})` : (cuda.error || "unavailable (0 devices)"),
+      cuda.available ? "state-ok" : "state-error"
+    )
+  );
+
+  if (dlls.status === "skipped") {
+    els.preflight.append(envRow("Runtime DLLs", `skipped (platform: ${data.platform || "non-Windows"})`, "state-idle"));
+  } else {
+    const dllEntries = Object.entries(dlls.dlls || {});
+    for (const [name, info] of dllEntries) {
+      els.preflight.append(
+        envRow(
+          name,
+          info.found ? `found (${info.path})` : "MISSING",
+          info.found ? "state-ok" : "state-error"
+        )
+      );
+    }
+  }
+
+  els.preflightHint.textContent = "";
+  if (!data.ok && data.problems && data.problems.length) {
+    const errBox = document.createElement("div");
+    errBox.className = "error";
+    errBox.textContent = "Problems:\n" + data.problems.map((p, idx) => `${idx + 1}. ${p}`).join("\n");
+    els.preflight.append(errBox);
+
+    if (data.hints && data.hints.length) {
+      els.preflightHint.textContent = "Hints: " + data.hints.join(" | ");
+    }
+  }
+}
+
 document.querySelectorAll('input[name="suite"]').forEach((input) => {
   input.addEventListener("change", applySuiteDefaults);
 });
@@ -905,9 +986,11 @@ els.stop.addEventListener("click", () => {
 });
 els.copy.addEventListener("click", copySummary);
 els.refreshEnv.addEventListener("click", loadEnv);
+els.refreshPreflight.addEventListener("click", loadPreflight);
 els.model.addEventListener("change", warnIfModelMissing);
 
 applySuiteDefaults();
 pollEngineLine();
 setInterval(pollEngineLine, 2000);
 loadEnv().then(resumeProgress);
+loadPreflight();
