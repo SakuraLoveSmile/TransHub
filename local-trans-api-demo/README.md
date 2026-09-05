@@ -223,3 +223,20 @@ python -m pytest
 5. **版本与发布基线**：定义第一个可供其他软件依赖的版本和发布验收标准。
 
 不在近期范围内：公网服务、多用户鉴权、CPU fallback、复杂任务队列、翻译质量自动评分。
+
+## 深色工具台交付记录（feat/dark-workbench-plan-20260905）
+
+本分支的深色字幕工作台（Vue 前端重构）由 **qoder 3.8 max xhigh** 完成，实测数据记录如下：
+
+| 项目 | 数据 |
+|---|---|
+| 分支 / worktree | `feat/dark-workbench-plan-20260905` / `TransHub-dark-workbench-plan`（基于 `6351fb1`） |
+| 完成日期 | 2026-09-05 |
+| 完成时间 | 19:59 创建 worktree → 21:01 最终验证与报告；墙钟约 62 分钟（2 个 goal 轮，含轮次间隔） |
+| 改动规模 | 暂存 22 文件 / +5957 行（含 lockfile 与配置拷贝）；其中前端源码+测试 17 文件 / +2957 行 |
+| 自动化验证 | `npm run test` 50/50 通过；`npm run typecheck` 无错误；`npm run build` 成功；`git diff --check` 干净 |
+| 浏览器验收 | 1440/1024/768/390 四视口无横向溢出；mock 全流程（选择→提交→结果→下载）；键盘可达；截图 5 张存于 `.acceptance-dark-workbench/` |
+| Token 速度 | 运行时未暴露真实 token 用量（会话日志 token 字段均为 0），无可靠值，记为 N/A |
+| 未验证项 | 真实 Windows + NVIDIA CUDA 推理；展开按钮浏览器未触发（单元测试覆盖）；下载落盘未在无头环境验证 |
+
+状态：改动已暂存，**未提交、未推送**。
