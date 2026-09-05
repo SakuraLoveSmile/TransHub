@@ -2,6 +2,8 @@
 
 TransHub 是 Windows 本地运行的转录 / 语音翻译 API 中枢，为本机其他软件提供统一的 AI 音频处理入口。
 
+> **分支说明**：本分支 `feat/dark-workbench-vue` 的前端「深色工具台」改造由 **WorkBuddy（快速档，glm-5.3-flash）** 完成——2026-09-06，worktree `TransHub-dark-workbench-vue`。含深色主题布局、组件拆分（MediaFilePicker / SubtitleTaskCard 等）、顺序轮询改造与 37 个组件测试；自动化门禁与 Mock 浏览器验收（20/20）均通过，真实 Windows + NVIDIA CUDA 推理未在本机验证。
+
 ## 当前阶段：Phase 3 完成，进入产品化阶段
 
 当前核心 MVP 已完成真实模型链路验证，主页「打开 → 选一个本地音频文件 → 出字幕 → 下载 SRT」闭环可用：
@@ -39,6 +41,27 @@ Engine Interface
 ```
 
 服务默认只监听 `127.0.0.1`，并接受本机文件路径。不要直接暴露到 LAN/WAN。
+
+## 统一字幕任务（初步可用版本）
+
+其他软件与 Vue 页面统一走异步字幕任务链路：
+
+```text
+POST /api/subtitle-tasks（file + mode）
+  → 202 + 任务编号
+GET /api/subtitle-tasks/{id}（排队 / 处理 / 成功 / 失败）
+GET /api/subtitle-tasks/{id}/file?format=srt|lrc（下载字幕）
+```
+
+- `mode=transcribe`：日语转录；`mode=translate`：日语音频翻译成中文。
+  成功后同时提供 SRT 与 LRC，切换格式无需重新推理。
+- 每个任务一个音视频，最多一个执行、三个等待；任务记录存 SQLite，
+  重启后可查询，终态记录与字幕保留七天。
+- Vue 操作面板：开发 `cd frontend && npm ci && npm run dev`；
+  生产构建 `build-web.bat`（测试 → 类型检查 → 构建），FastAPI 托管
+  `frontend/dist`（缺失时回退旧静态页，`/diagnostics.html` 始终可访问）。
+- 完整接口、错误码表与调用示例见 [`docs/subtitle-tasks.md`](docs/subtitle-tasks.md)，
+  标准库客户端示例见 `scripts/subtitle_task_client_example.py`。
 
 ## Windows PowerShell 启动
 
@@ -99,7 +122,7 @@ python -m app.main
 
 ## API Contract
 
-完整字段、错误码和 Stable / Legacy / Diagnostics 边界见 [`docs/api-contract-v1.md`](docs/api-contract-v1.md)。
+完整字段、错误码和 Stable / Legacy / Diagnostics 边界见 [`docs/api-contract-v1.md`](docs/api-contract-v1.md)。面向真实调用方的完整接入契约、四步 Readiness 检查、音频提交、本地字幕构建与 409 指数退避重试见 [`docs/client-integration.md`](docs/client-integration.md)。
 
 ### Stable API v1
 
@@ -118,11 +141,11 @@ python -m app.main
 
 `GET /api/health` 继续保留，仅用于旧客户端兼容。新客户端必须使用 `GET /health`。
 
-`/v1` 的 SAK-31/32 内存任务生命周期接口继续保留，暂不迁移。
+`/v1` 的任务接口为历史遗留（Legacy / Mock），走 `MockTranscriptionProvider` 且不驱动真实引擎。新客户端与真实外部软件必须使用同步 `/api/*` 接口。
 
 ### Local Setup / Diagnostics API
 
-`GET /api/setup/env`、`POST /api/setup/download`、`GET /api/setup/download`、`POST /api/upload` 和 `/diagnostics.html` 仅供本机设置与诊断，不属于 Stable API v1，不承诺长期兼容。`/api/upload` 是网页「选文件」的支撑端点。
+`GET /api/setup/env`、`GET /api/setup/preflight`、`POST /api/setup/download`、`GET /api/setup/download`、`POST /api/upload` 和 `/diagnostics.html` 仅供本机设置与诊断，不属于 Stable API v1，不承诺长期兼容。`/api/upload` 是网页「选文件」的支撑端点。`GET /api/setup/preflight` 报告 GPU、CUDA 运行时与 Windows DLL 自诊断结构。
 
 ## Phase 2：真实日语转录
 
@@ -130,16 +153,43 @@ python -m app.main
 
 真实 `faster-whisper` 与 CUDA 路径只在 Windows + NVIDIA 机器上运行（开发/CI 继续用 Mock）。
 
+### 推荐流程：一键安装与启动
+
 ```powershell
-copy config.real.example.toml config.real.toml
-.venv\Scripts\pip install -r requirements.txt
-.venv\Scripts\pip install -r requirements-ai.txt
-python scripts\download_models.py --model whisper-ja-1.5b
-set TRANS_HUB_CONFIG=%CD%\config.real.toml
-run.bat
+# 1. 一键初始化环境并安装基础 + AI 依赖（faster-whisper, ctranslate2, nvidia-ml-py 等）
+.\setup-real.bat
+
+# 2. 下载真实模型（若尚未下载）
+.venv\Scripts\python scripts\download_models.py --model whisper-ja-1.5b
+
+# 3. 一键 GPU Preflight 检查并启动真实引擎
+.\run-real.bat
 ```
 
-`config.real.toml` 与 `config.toml` 的差异只有引擎开关：`engine = "faster-whisper"`、`[faster_whisper] device = "cuda"`、`compute_type = "float16"`；`config.real.toml` 保持本地不入库（已在 `.gitignore`），仓库只提交 `config.real.example.toml` 模板。正式真实推理为 **CUDA-only**，无 GPU / CUDA Runtime 时明确失败，不会自动降级到 CPU。
+`run-real.bat` 会自动：
+1. 检查 `.venv` 虚拟环境。
+2. 若 `config.real.toml` 不存在，自动从 `config.real.example.toml` 复制。
+3. 设置 `TRANS_HUB_CONFIG`。
+4. 运行 `scripts\preflight.py` 自动化检测 GPU 硬件、驱动版本、CUDA 支持以及 Windows 必需的 `cublas64_12.dll`、`cublasLt64_12.dll`、`cudnn64_9.dll`。
+5. 门禁检查通过后启动 Uvicorn；若检测失败则 fail-fast 拒绝启动并输出明确的修复指引，避免无效排查。
+
+可随时单独运行 GPU Preflight 诊断工具：
+
+```powershell
+.venv\Scripts\python scripts\preflight.py
+```
+
+### 正式运行目录约定
+
+TransHub 保持开箱即用的标准目录布局：
+- `.venv/`：Python 运行环境与依赖
+- `models/`：已下载的离线模型（`whisper-ja-1.5b/`、`chickenrice-v2/`）
+- `output/`：推理生成的 `.transcribe.json`、`.transcribe.srt` 等产物
+- `uploads/`：Web 端上传媒体暂存目录
+- `config.real.toml`：真实引擎配置（本地保持，已被 git 忽略）
+- `config.toml`：默认 mock 配置（用于 CI 和开发）
+
+`config.real.toml` 与 `config.toml` 的差异只有引擎开关：`engine = "faster-whisper"`、`[faster_whisper] device = "cuda"`、`compute_type = "float16"`。正式真实推理为 **CUDA-only**，无 GPU / CUDA Runtime 时明确失败，不会自动降级到 CPU。
 
 启动后 `GET /api/status` 应为 `engine=faster-whisper`、`mock=false`、`device=cuda`。Phase 2 已完成 Windows + NVIDIA CUDA 真机验收：真实 19 分钟级日语音频完成模型加载、转录、segments、JSON/SRT 与 API Contract 验证。完整验收步骤见 [`docs/phase2-windows-nvidia.md`](docs/phase2-windows-nvidia.md)，自动验收入口：
 
@@ -216,10 +266,16 @@ python -m pytest
 
 核心推理 MVP 已经成立。下一阶段优先从“能在开发环境运行”推进到“能稳定被其他本机软件长期调用”：
 
-1. **Windows Runtime / GPU Preflight**：自动发现并验证 CUDA、cuBLAS、cuDNN DLL 与可用 NVIDIA GPU，提供明确错误信息。
-2. **Windows 启动与分发**：减少手工 Python 环境配置，整理一键启动、依赖安装和正式运行目录。
-3. **服务运行稳定性**：完善启动/关闭、模型切换、并发忙状态、异常恢复与日志诊断。
-4. **真实客户端接入**：用至少一个实际调用方完成端到端集成，验证 Stable API v1 足够支撑业务。
-5. **版本与发布基线**：定义第一个可供其他软件依赖的版本和发布验收标准。
+1. [x] **Windows Runtime / GPU Preflight**：已实现。新增 `app/core/preflight.py`、`scripts\preflight.py`、`GET /api/setup/preflight`、Web 诊断页 Preflight 面板；真实引擎启动 fail-fast 门禁阻断无 GPU / 缺驱动 / 缺 DLL 的无效启动。
+2. [x] **Windows 启动与分发**：已实现。提供 `setup-real.bat`（一键安装 AI 依赖）、`run-real.bat`（一键 Preflight 检查并启动）以及正式运行目录约定（`.venv/`、`models/`、`output/`、`uploads/`、`config.real.toml`）。
+3. [x] **服务运行稳定性**：已实现。
+   - **单槽保护与忙状态**：`infer`、`load_model`、`unload_model` 共享单槽互斥，并发时返回 HTTP 409 `ENGINE_BUSY`；模型加载期 `/api/status` 实时显示 `running`。
+   - **优雅关闭与资源释放**：`lifespan` 退出时取消未完成下载任务，尽力调用 `engine.unload_model()` 释放显存。
+   - **异常恢复与稳定形状**：未捕获异常返回稳定的 HTTP 500 JSON（`/api/*` 为 `{code: "INTERNAL_ERROR", detail}`，`/v1/*` 为 `ErrorResponse`）；转录产物写盘失败做容错并仍返回计算结果。
+4. [x] **真实客户端接入**：已实现。
+   - **集成契约文档**：编写 [`docs/client-integration.md`](docs/client-integration.md)，详述四步 Readiness 判定（`/health` → `/api/setup/preflight` → `/api/status` → `/api/models`）、本地上传与绝对路径提交模式、`InferenceResult` 自足消费与本地构建 SRT、409 忙状态指数退避重试算法、统一错误码表及批处理预热建议；明确 `/v1` 为 legacy/mock，真实外部软件统一使用同步 `/api/*`。
+   - **全生命周期验收 Harness**：提供 [`scripts/client_integration_check.py`](scripts/client_integration_check.py)，以真实调用方视角端到端验证 Readiness 门禁、模型预热、音频上传、转录、翻译、并发单槽 409 退避恢复、本地 SRT 重建与服务端产物一致性、稳定错误契约。
+   - **单元与集成测试**：在 `tests/test_client_integration.py` 中覆盖 Mock 模式下客户端生命周期的全部核心逻辑与 Checker CLI 脚本执行，持续保障 CI 与开发回归。
+5. [ ] **版本与发布基线**：定义第一个可供其他软件依赖的版本和发布验收标准。
 
 不在近期范围内：公网服务、多用户鉴权、CPU fallback、复杂任务队列、翻译质量自动评分。
