@@ -18,6 +18,7 @@ from app.core.config import (
     model_dir_is_complete,
 )
 from app.core.errors import DownloadBusyError, UnknownModelError
+from app.core.preflight import run_preflight
 
 logger = logging.getLogger("app.setup")
 DEFAULT_ENDPOINT = "https://huggingface.co"
@@ -139,6 +140,9 @@ class SetupService:
             "install_command": ".venv\\Scripts\\pip install -r requirements-ai.txt",
         }
 
+    def preflight(self) -> dict:
+        return run_preflight()
+
     async def start_download(self, model_id: str, endpoint: str = "") -> dict:
         if model_id not in MODEL_CATALOG:
             raise UnknownModelError(f"Unknown model: {model_id}")
@@ -158,9 +162,25 @@ class SetupService:
     def progress(self) -> dict:
         return {"state": "idle"} if self.job is None else self.job.snapshot()
 
+    async def shutdown(self) -> None:
+        if self._task is not None and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):
+                pass
+            if self.job and self.job.state == "running":
+                self.job.state = "failed"
+                self.job.error = "Download cancelled by shutdown"
+        self._task = None
+
     async def _run(self, job: DownloadJob) -> None:
         try:
             await asyncio.to_thread(self._download, job)
+        except asyncio.CancelledError:
+            job.state = "failed"
+            job.error = "Download cancelled by shutdown"
+            raise
         except Exception as error:
             job.state = "failed"
             job.error = f"{type(error).__name__}: {str(error)[:200]}"
@@ -174,6 +194,7 @@ class SetupService:
                 else:
                     job.state = "failed"
                     job.error = "download finished but the model is still incomplete"
+
 
     def _download(self, job: DownloadJob) -> None:
         from huggingface_hub import HfApi, snapshot_download
