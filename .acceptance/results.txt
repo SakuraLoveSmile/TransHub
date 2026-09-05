@@ -1,0 +1,19 @@
+viewport 1440: 横向溢出 0px
+viewport 1024: 横向溢出 0px
+viewport 768: 横向溢出 0px
+viewport 390: 横向溢出 0px
+加载的 JS 资源: http://127.0.0.1:8981/assets/index-DNWQp7O8.js
+状态条: 已连接 |  | 模式模拟模式（Mock） | 设备mock | 当前模型未加载 | 引擎状态空闲
+空状态可见: false
+Tab 顺序: button[button] "选择文件" -> input[radio]=transcribe "" -> input[radio]=translate "" -> button[button] "刷新" -> button[button] "复制文本" -> a "下载 SRT" -> a "下载 LRC" -> button[button] "加载"
+键盘选中翻译模式: true
+已选文件: 1.flac
+提交受理: 已展示任务编号
+任务完成: 状态徽标=已完成
+Mock 标记: true
+展开全文: 文本较短无需展开
+复制反馈: 已复制
+下载 SRT: 1.zh.srt
+下载 LRC: 1.zh.lrc
+（接下来由外部停止后端后执行断线截图）
+断线状态: 未在 45s 内出现（后端可能仍在运行）

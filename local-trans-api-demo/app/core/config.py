@@ -43,6 +43,12 @@ SUPPORTED_SUFFIXES = frozenset(
 )
 
 
+DEFAULT_DATA_DIR = "./data"
+DEFAULT_MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
+DEFAULT_MAX_WAITING = 3
+DEFAULT_RETENTION_DAYS = 7
+
+
 @dataclass(frozen=True)
 class Profile:
     id: str
@@ -50,6 +56,14 @@ class Profile:
     task: str
     language: str
     target_language: str | None = None
+
+
+@dataclass(frozen=True)
+class SubtitleTaskSettings:
+    data_directory: Path
+    max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES
+    max_waiting: int = DEFAULT_MAX_WAITING
+    retention_days: int = DEFAULT_RETENTION_DAYS
 
 
 @dataclass(frozen=True)
@@ -68,9 +82,16 @@ class AppConfig:
     upload_directory: Path
     profiles: dict[str, Profile]
     faster_whisper: FasterWhisperSettings = FasterWhisperSettings()
+    subtitle_tasks: SubtitleTaskSettings | None = None
 
     def profile(self, profile_id: str) -> Profile | None:
         return self.profiles.get(profile_id)
+
+    @property
+    def resolved_subtitle_tasks(self) -> SubtitleTaskSettings:
+        if self.subtitle_tasks is not None:
+            return self.subtitle_tasks
+        return SubtitleTaskSettings(data_directory=BASE_DIR / "data")
 
 
 def model_dir_is_complete(directory: Path) -> bool:
@@ -104,6 +125,30 @@ def load_config(path: Path = CONFIG_PATH) -> AppConfig:
         raise RuntimeError(
             f"Unknown [faster_whisper] device: {device!r} (expected one of {DEVICES})"
         )
+    tasks_raw = raw.get("subtitle_tasks", {})
+    data_directory = _resolve_directory(
+        tasks_raw.get("data_directory", DEFAULT_DATA_DIR)
+    )
+    try:
+        max_upload_bytes = int(
+            tasks_raw.get("max_upload_bytes", DEFAULT_MAX_UPLOAD_BYTES)
+        )
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("Invalid [subtitle_tasks] max_upload_bytes") from exc
+    if max_upload_bytes <= 0:
+        raise RuntimeError("[subtitle_tasks] max_upload_bytes must be positive")
+    max_waiting = int(tasks_raw.get("max_waiting", DEFAULT_MAX_WAITING))
+    retention_days = int(tasks_raw.get("retention_days", DEFAULT_RETENTION_DAYS))
+    env_upload = os.environ.get("TRANSFERHUB_MAX_UPLOAD_BYTES", "").strip()
+    if env_upload:
+        try:
+            max_upload_bytes = int(env_upload)
+        except ValueError as exc:
+            raise RuntimeError(
+                "TRANSFERHUB_MAX_UPLOAD_BYTES must be an integer"
+            ) from exc
+        if max_upload_bytes <= 0:
+            raise RuntimeError("TRANSFERHUB_MAX_UPLOAD_BYTES must be positive")
     return AppConfig(
         host=server.get("host", "127.0.0.1"),
         port=int(server.get("port", 8765)),
@@ -121,5 +166,11 @@ def load_config(path: Path = CONFIG_PATH) -> AppConfig:
         faster_whisper=FasterWhisperSettings(
             device=device,
             compute_type=str(faster_whisper.get("compute_type", "default")).lower(),
+        ),
+        subtitle_tasks=SubtitleTaskSettings(
+            data_directory=data_directory,
+            max_upload_bytes=max_upload_bytes,
+            max_waiting=max_waiting,
+            retention_days=retention_days,
         ),
     )
