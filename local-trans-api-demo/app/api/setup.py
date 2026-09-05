@@ -12,6 +12,11 @@ async def environment(request: Request) -> dict:
     return request.app.state.setup.env()
 
 
+@router.get("/preflight")
+async def preflight(request: Request) -> dict:
+    return request.app.state.setup.preflight()
+
+
 @router.get("/download")
 async def download_progress(request: Request) -> dict:
     return request.app.state.setup.progress()

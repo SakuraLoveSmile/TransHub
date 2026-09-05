@@ -46,7 +46,13 @@ D:\ASMR\test.flac
 cd local-trans-api-demo
 ```
 
-安装 AI 依赖：
+安装 AI 依赖（或使用一键安装脚本 `.\setup-real.bat`）：
+
+```powershell
+.\setup-real.bat
+```
+
+等价手动步骤：
 
 ```powershell
 .venv\Scripts\pip install -r requirements-ai.txt
@@ -97,29 +103,26 @@ tokenizer.json
 复制配置：
 
 ```powershell
-copy config.toml config.real.toml
+copy config.real.example.toml config.real.toml
 ```
 
-编辑：
+或者直接使用一键启动脚本（推荐）：
 
-```toml
-[inference]
-engine = "faster-whisper"
-
-[faster_whisper]
-device = "cuda"
-compute_type = "float16"
+```powershell
+.\run-real.bat
 ```
 
-启动前指定配置：
+`run-real.bat` 会自动：
+1. 检查 `.venv`
+2. 若 `config.real.toml` 不存在，自动从 `config.real.example.toml` 复制
+3. 设置 `TRANS_HUB_CONFIG`
+4. 运行 `scripts\preflight.py` 自动化检测 GPU、驱动与 CUDA/cuDNN DLL
+5. 检查通过后启动服务；若缺少依赖或 DLL，立即 fail-fast 拒绝启动并打印可操作的修复指引
+
+手动启动流程：
 
 ```powershell
 $env:TRANS_HUB_CONFIG="$PWD\config.real.toml"
-```
-
-然后启动：
-
-```powershell
 run.bat
 ```
 
@@ -203,13 +206,19 @@ first_text
 - ctranslate2 CUDA 支持
 - `/api/status` 中 device 值
 
-Windows 下还可以先确认关键 DLL 是否可发现：
+使用自动化 GPU Preflight CLI 检查（替代手工 `where.exe`）：
 
 ```powershell
-where.exe cublas64_12.dll
-where.exe cublasLt64_12.dll
-where.exe cudnn64_9.dll
+.venv\Scripts\python scripts\preflight.py
 ```
+
+CLI 会自动探测：
+- NVIDIA GPU 型号与驱动版本（NVML）
+- CUDA Runtime 与 ctranslate2 可用状态
+- 关键 DLL 是否存在：`cublas64_12.dll`、`cublasLt64_12.dll`、`cudnn64_9.dll`（自动检查系统 PATH、CUDA_PATH、site-packages 与标准安装路径）
+- 若有缺失，输出精准的修复指引与 PATH 提示
+
+服务启动后，亦可在浏览器访问 `http://127.0.0.1:8765/diagnostics.html` 查看「GPU Preflight」面板。
 
 如果 CUDA Runtime 不完整，应修复 GPU 环境后重新启动服务；TransferHub 不会自动降级到 CPU。
 
